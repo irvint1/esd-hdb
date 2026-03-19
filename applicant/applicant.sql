@@ -1,0 +1,90 @@
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+CREATE DATABASE IF NOT EXISTS `applicant` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;
+USE `applicant`;
+
+DROP TABLE IF EXISTS `applicant`;
+
+CREATE TABLE `applicant` (
+  `applicant_id` INT AUTO_INCREMENT,
+  `nric` VARCHAR(9) NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `date_of_birth` DATE NOT NULL,
+  `mobile_number` VARCHAR(8) NOT NULL,
+  `email` VARCHAR(64) NOT NULL,
+  `address` VARCHAR(128) NOT NULL,
+  `place_of_birth` VARCHAR(64) NOT NULL,
+  `race` VARCHAR(32) NOT NULL,
+  `nationality` VARCHAR(32) NOT NULL,
+  `sex` VARCHAR(10) NOT NULL,
+  PRIMARY KEY (`applicant_id`),
+  UNIQUE KEY `unique_nric` (`nric`),
+  UNIQUE KEY `unique_email` (`email`),
+  UNIQUE KEY `unique_mobile` (`mobile_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT INTO `applicant`
+(`nric`, `name`, `date_of_birth`, `mobile_number`, `email`, `address`, `place_of_birth`, `race`, `nationality`, `sex`)
+VALUES
+('S8501234A','Aaron Tan','1985-04-12','91230001','aaron.tan1@example.com','Bedok','Singapore','Chinese','Singapore','Male'),
+('S9102345B','Brenda Lim','1991-07-23','91230002','brenda.lim2@example.com','Tampines','Singapore','Chinese','Singapore','Female'),
+('S7803456C','Chong Wei','1978-11-02','91230003','chong.wei3@example.com','Jurong','Singapore','Chinese','Singapore','Male'),
+('S9504567D','Darren Ong','1995-01-19','91230004','darren.ong4@example.com','Yishun','Singapore','Chinese','Singapore','Male'),
+('S8805678E','Elaine Koh','1988-09-30','91230005','elaine.koh5@example.com','Woodlands','Singapore','Chinese','Singapore','Female'),
+('S9206789F','Farid Ali','1992-05-14','91230006','farid.ali6@example.com','Pasir Ris','Singapore','Malay','Singapore','Male'),
+('S8607890G','Ghazali Rahman','1986-08-25','91230007','ghazali.rahman7@example.com','Bedok','Singapore','Malay','Singapore','Male'),
+('S9408901H','Hafiz Salleh','1994-12-03','91230008','hafiz.salleh8@example.com','Tampines','Singapore','Malay','Singapore','Male'),
+('S8909012I','Iyer Kumar','1989-03-11','91230009','iyer.kumar9@example.com','Serangoon','India','Indian','Singapore','Male'),
+('S9300123J','Jaya Singh','1993-06-27','91230010','jaya.singh10@example.com','Ang Mo Kio','Singapore','Indian','Singapore','Female'),
+('S9701234K','Kevin Tan','1997-10-08','91230011','kevin.tan11@example.com','Hougang','Singapore','Chinese','Singapore','Male'),
+('S8402345L','Leon Lim','1984-02-17','91230012','leon.lim12@example.com','Punggol','Singapore','Chinese','Singapore','Male'),
+('S7903456M','Marcus Ong','1979-07-29','91230013','marcus.ong13@example.com','Sengkang','Malaysia','Chinese','Singapore','Male'),
+('S9004567N','Nicholas Goh','1990-11-15','91230014','nicholas.goh14@example.com','Bedok','Singapore','Chinese','Singapore','Male'),
+('S8705678O','Olivia Lee','1987-04-05','91230015','olivia.lee15@example.com','Tampines','Singapore','Chinese','Singapore','Female'),
+('S9606789P','Paul Tan','1996-09-21','91230016','paul.tan16@example.com','Jurong','Singapore','Others','Singapore','Male'),
+('S8307890Q','Queenie Lim','1983-01-09','91230017','queenie.lim17@example.com','Yishun','Singapore','Others','Singapore','Female'),
+('S9108901R','Ravi Kumar','1991-06-12','91230018','ravi.kumar18@example.com','Woodlands','India','Indian','Singapore','Male'),
+('S7709012S','Suresh Nair','1977-12-19','91230019','suresh.nair19@example.com','Pasir Ris','Singapore','Indian','Singapore','Male'),
+('S9800123T','Tan Mei','1998-03-03','91230020','tan.mei20@example.com','Bedok','China','Chinese','Singapore','Female'),
+('T0301234A','Alicia Tan','2003-02-14','92340001','alicia.tan21@example.com','Bedok','Singapore','Chinese','Singapore','Female'),
+('T0102345B','Brandon Lim','2001-05-21','92340002','brandon.lim22@example.com','Tampines','Singapore','Chinese','Singapore','Male'),
+('T0403456C','Cheryl Ong','2004-08-30','92340003','cheryl.ong23@example.com','Jurong','Singapore','Chinese','Singapore','Female'),
+('T0204567D','Daniel Goh','2002-11-11','92340004','daniel.goh24@example.com','Yishun','Singapore','Chinese','Singapore','Male'),
+('T0005678E','Evelyn Lee','2000-01-01','92340005','evelyn.lee25@example.com','Woodlands','Singapore','Chinese','Singapore','Female'),
+('T0506789F','Faris Ali','2005-07-19','92340006','faris.ali26@example.com','Pasir Ris','Singapore','Malay','Singapore','Male'),
+('T0607890G','Gina Rahman','2006-09-23','92340007','gina.rahman27@example.com','Bedok','Singapore','Malay','Singapore','Female'),
+('T0108901H','Hari Kumar','2001-12-12','92340008','hari.kumar28@example.com','Serangoon','India','Indian','Singapore','Male'),
+('T0309012I','Isha Singh','2003-03-03','92340009','isha.singh29@example.com','Ang Mo Kio','Singapore','Indian','Singapore','Female'),
+('T0400123J','Jason Tan','2004-04-04','92340010','jason.tan30@example.com','Hougang','Singapore','Others','Singapore','Male'),
+('S9201111K','Kelvin Tan','1992-02-02','91230111','kelvin.tan91@example.com','Bedok','Singapore','Chinese','Singapore','Male'),
+('S8902222L','Linda Lim','1989-03-03','91230112','linda.lim92@example.com','Tampines','Singapore','Chinese','Singapore','Female'),
+('S8703333M','Michael Ong','1987-04-04','91230113','michael.ong93@example.com','Jurong','Singapore','Chinese','Singapore','Male'),
+('S9404444N','Nora Lee','1994-05-05','91230114','nora.lee94@example.com','Yishun','Singapore','Chinese','Singapore','Female'),
+('T0205555O','Owen Tan','2002-06-06','92340115','owen.tan95@example.com','Woodlands','Singapore','Chinese','Singapore','Male'),
+('T0306666P','Phoebe Lim','2003-07-07','92340116','phoebe.lim96@example.com','Pasir Ris','Singapore','Chinese','Singapore','Female'),
+('T0107777Q','Quentin Ong','2001-08-08','92340117','quentin.ong97@example.com','Bedok','Malaysia','Chinese','Singapore','Male'),
+('T0408888R','Rachel Goh','2004-09-09','92340118','rachel.goh98@example.com','Tampines','Singapore','Chinese','Singapore','Female'),
+('T0509999S','Sean Lee','2005-10-10','92340119','sean.lee99@example.com','Jurong','Singapore','Chinese','Singapore','Male'),
+('T0200000T','Tina Koh','2002-11-11','92340120','tina.koh100@example.com','Yishun','Singapore','Chinese','Singapore','Female'),
+('S8801111A','Adrian Tan','1988-01-15','91230121','adrian.tan@example.com','Bedok','Singapore','Chinese','Singapore','Male'),
+('S9102222B','Belinda Lim','1991-02-20','91230122','belinda.lim@example.com','Tampines','Singapore','Chinese','Singapore','Female'),
+('S9303333C','Calvin Ong','1993-03-25','91230123','calvin.ong@example.com','Jurong','Singapore','Chinese','Singapore','Male'),
+('S8504444D','Daphne Lee','1985-04-10','91230124','daphne.lee@example.com','Yishun','Singapore','Chinese','Singapore','Female'),
+('S9705555E','Eugene Koh','1997-05-05','91230125','eugene.koh@example.com','Woodlands','Singapore','Chinese','Singapore','Male'),
+('S9206666F','Faizal Ali','1992-06-18','91230126','faizal.ali@example.com','Pasir Ris','Singapore','Malay','Singapore','Male'),
+('S9407777G','Nurul Rahman','1994-07-21','91230127','nurul.rahman@example.com','Bedok','Singapore','Malay','Singapore','Female'),
+('S8908888H','Harish Kumar','1989-08-14','91230128','harish.kumar@example.com','Serangoon','India','Indian','Singapore','Male'),
+('S9109999I','Indra Singh','1991-09-09','91230129','indra.singh@example.com','Ang Mo Kio','Singapore','Indian','Singapore','Male'),
+('T0101111J','Jared Tan','2001-01-01','92340121','jared.tan@example.com','Hougang','Singapore','Chinese','Singapore','Male'),
+('T0202222K','Kelly Lim','2002-02-02','92340122','kelly.lim@example.com','Punggol','Singapore','Chinese','Singapore','Female'),
+('T0303333L','Lucas Ong','2003-03-03','92340123','lucas.ong@example.com','Sengkang','Singapore','Chinese','Singapore','Male'),
+('T0404444M','Megan Lee','2004-04-04','92340124','megan.lee@example.com','Bedok','Singapore','Chinese','Singapore','Female'),
+('T0505555N','Noah Koh','2005-05-05','92340125','noah.koh@example.com','Tampines','Singapore','Chinese','Singapore','Male'),
+('T0606666O','Omar Ali','2006-06-06','92340126','omar.ali@example.com','Jurong','Singapore','Malay','Singapore','Male'),
+('T0207777P','Putri Rahman','2002-07-07','92340127','putri.rahman@example.com','Yishun','Singapore','Malay','Singapore','Female'),
+('T0308888Q','Raj Kumar','2003-08-08','92340128','raj.kumar@example.com','Woodlands','India','Indian','Singapore','Male'),
+('T0109999R','Rina Singh','2001-09-09','92340129','rina.singh@example.com','Pasir Ris','Singapore','Indian','Singapore','Female'),
+('T0201212S','Samuel Tan','2002-12-12','92340130','samuel.tan@example.com','Bedok','Singapore','Others','Singapore','Male'),
+('T0302323T','Tiffany Lim','2003-02-23','92340131','tiffany.lim@example.com','Tampines','Singapore','Others','Singapore','Female');
