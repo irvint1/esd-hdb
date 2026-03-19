@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import re
 from datetime import datetime
+from flasgger import Swagger
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/applicant'
@@ -9,6 +10,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
 db = SQLAlchemy(app)
+
+# Initialize flasgger 
+app.config['SWAGGER'] = {
+    'title': 'Applicant microservice API',
+    'version': 1.0,
+    "openapi": "3.0.2",
+    'description': 'Allows create, retrieve, update, and delete of applicants'
+}
+swagger = Swagger(app)
 
 class Applicant(db.Model):
     __tablename__ = 'applicant'
@@ -24,9 +34,10 @@ class Applicant(db.Model):
     race = db.Column(db.String(32), nullable=False)
     nationality = db.Column(db.String(32), nullable=False)
     sex = db.Column(db.String(10), nullable=False)
+    password = db.Column(db.String(100), nullable=False)
 
     def __init__(self, nric, name, date_of_birth, mobile_number, email,
-                 address, place_of_birth, race, nationality, sex):
+                 address, place_of_birth, race, nationality, sex, password):
         self.nric = nric
         self.name = name
         self.date_of_birth = date_of_birth
@@ -37,6 +48,7 @@ class Applicant(db.Model):
         self.race = race
         self.nationality = nationality
         self.sex = sex
+        self.password = password
 
     def json(self):
         return {
@@ -50,12 +62,22 @@ class Applicant(db.Model):
             "place_of_birth": self.place_of_birth,
             "race": self.race,
             "nationality": self.nationality,
-            "sex": self.sex
+            "sex": self.sex,
+            "password": self.password,
         }
 
 # GET all applicants
 @app.route("/applicant")
 def get_all():
+    """
+    Get all applicants
+    ---
+    responses:
+        200:
+            description: Return all applicants
+        404:
+            description: No applicants
+    """
     applicants = db.session.scalars(db.select(Applicant)).all()
 
     if applicants:
