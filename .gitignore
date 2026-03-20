@@ -1,0 +1,54 @@
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+/.vscode/
+/.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Python backend (applicant/) ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# SQLite and local DB artifacts
+*.sqlite
+*.sqlite3
+
+# --- Node / Vite frontend (hdb-frontend/) ---
+hdb-frontend/node_modules/
+hdb-frontend/dist/
+hdb-frontend/dist-ssr/
+hdb-frontend/coverage/
+hdb-frontend/logs/
+hdb-frontend/.eslintcache
+hdb-frontend/*.tsbuildinfo
+hdb-frontend/*.local
+hdb-frontend/cypress/videos/
+hdb-frontend/cypress/screenshots/
+hdb-frontend/__screenshots__/
+hdb-frontend/*.timestamp-*-*.mjs
+hdb-frontend/.vscode/*
+!hdb-frontend/.vscode/extensions.json
+hdb-frontend/package-lock.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
