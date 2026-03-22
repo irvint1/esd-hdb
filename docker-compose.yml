@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  ballot-service:
+    build:
+      context: ./ballot
+    container_name: ballot_service
+    ports:
+      - "6001:5000"
+    volumes:
+      - ./applicant-service:/app
+    restart: always
