@@ -20,9 +20,8 @@ app.config['SWAGGER'] = {
 }
 swagger = Swagger(app)
 
-# ---------------------------------------------------------------------------
-# External Government API URLs (Steps 7, 8a, 8b, 8c, 8d, 9)
-# ---------------------------------------------------------------------------
+
+# External Government API URLs 
 ICA_API_URL  = os.environ.get("ICA_API_URL",  "https://api.ica.gov.sg")
 IRAS_API_URL = os.environ.get("IRAS_API_URL", "https://api.iras.gov.sg")
 CPF_API_URL  = os.environ.get("CPF_API_URL",  "https://api.cpf.gov.sg")
@@ -70,10 +69,6 @@ class EligibilityCheck(db.Model):
             "created_at":        str(self.created_at),
         }
 
-
-# ---------------------------------------------------------------------------
-# External API helpers (Steps 7–9)
-# ---------------------------------------------------------------------------
 def check_ica(nric):
     """Step 7 / 8a – Verify Citizenship / PR Status via ICA API (HTTP GET)."""
     try:
@@ -132,10 +127,7 @@ def check_hfe(application_id, nric, flat_type):
     except:
         return True
 
-
-# ---------------------------------------------------------------------------
 # Routes
-# ---------------------------------------------------------------------------
 @app.route("/eligibility")
 def get_all():
     """
