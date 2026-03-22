@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HDB BTO Flat Selection</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --hdb-red: #C4272E;
+      --hdb-dark: #1a1a2e;
+      --hdb-card: #ffffff;
+      --hdb-bg: #f0f1f5;
+      --hdb-border: #e2e4ea;
+      --hdb-text: #2c2c3a;
+      --hdb-muted: #6b7085;
+      --hdb-green: #1a8a5c;
+      --hdb-amber: #d4880f;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--hdb-bg);
+      color: var(--hdb-text);
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: var(--hdb-dark);
+      color: white;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .header-logo {
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.5px;
+    }
+    .header-logo span { color: var(--hdb-red); }
+    .header-sub {
+      font-size: 13px;
+      color: #9a9bb0;
+      font-family: 'DM Mono', monospace;
+    }
+
+    /* Stepper */
+    .stepper {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      padding: 24px 32px 0;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--hdb-muted);
+    }
+    .step-item.active { color: var(--hdb-red); }
+    .step-item.done { color: var(--hdb-green); }
+    .step-num {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+      background: var(--hdb-border);
+      color: var(--hdb-muted);
+    }
+    .step-item.active .step-num { background: var(--hdb-red); color: white; }
+    .step-item.done .step-num { background: var(--hdb-green); color: white; }
+    .step-line {
+      width: 48px; height: 2px;
+      background: var(--hdb-border);
+      margin: 0 12px;
+    }
+    .step-line.done { background: var(--hdb-green); }
+
+    /* Container */
+    .container {
+      max-width: 720px;
+      margin: 24px auto;
+      padding: 0 24px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--hdb-card);
+      border-radius: 12px;
+      border: 1px solid var(--hdb-border);
+      padding: 32px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      letter-spacing: -0.3px;
+    }
+    .card-desc {
+      font-size: 14px;
+      color: var(--hdb-muted);
+      margin-bottom: 24px;
+    }
+
+    /* Form */
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--hdb-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    select, input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--hdb-border);
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      margin-bottom: 20px;
+      background: white;
+      color: var(--hdb-text);
+      transition: border-color 0.2s;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--hdb-red);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--hdb-red);
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #a82025;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: var(--hdb-dark);
+      color: white;
+    }
+
+    /* Flat grid */
+    .flat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .flat-card {
+      border: 2px solid var(--hdb-border);
+      border-radius: 10px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .flat-card:hover { border-color: var(--hdb-red); background: #fef7f7; }
+    .flat-card.selected {
+      border-color: var(--hdb-red);
+      background: #fef2f2;
+      box-shadow: 0 0 0 3px rgba(196,39,46,0.12);
+    }
+    .flat-card.unavailable {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .flat-type {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--hdb-red);
+      margin-bottom: 4px;
+    }
+    .flat-unit {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .flat-detail {
+      font-size: 13px;
+      color: var(--hdb-muted);
+    }
+    .flat-price {
+      font-size: 15px;
+      font-weight: 700;
+      margin-top: 8px;
+      color: var(--hdb-text);
+      font-family: 'DM Mono', monospace;
+    }
+    .flat-status {
+      position: absolute;
+      top: 12px; right: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .flat-status.available { background: #e6f7ef; color: var(--hdb-green); }
+    .flat-status.reserved { background: #fef3e2; color: var(--hdb-amber); }
+
+    /* Result */
+    .result-icon {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 28px;
+    }
+    .result-icon.success { background: #e6f7ef; }
+    .result-icon.fail { background: #fef2f2; }
+    .result-center { text-align: center; }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--hdb-border);
+      font-size: 14px;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: var(--hdb-muted); }
+    .detail-value { font-weight: 600; font-family: 'DM Mono', monospace; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error */
+    .error-msg {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--hdb-red);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logo"><span>HDB</span> BTO Portal</div>
+      <div class="header-sub">Flat Selection System</div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="stepper">
+      <div class="step-item" :class="{ active: step === 1, done: step > 1 }">
+        <div class="step-num">{{ step > 1 ? '✓' : '1' }}</div>
+        Login
+      </div>
+      <div class="step-line" :class="{ done: step > 1 }"></div>
+      <div class="step-item" :class="{ active: step === 2, done: step > 2 }">
+        <div class="step-num">{{ step > 2 ? '✓' : '2' }}</div>
+        Select Flat
+      </div>
+      <div class="step-line" :class="{ done: step > 2 }"></div>
+      <div class="step-item" :class="{ active: step === 3, done: false }">
+        <div class="step-num">3</div>
+        Result
+      </div>
+    </div>
+
+    <div class="container">
+
+      <!-- ============ STEP 1: LOGIN ============ -->
+      <template v-if="step === 1">
+        <div class="card">
+          <div class="card-title">Applicant Login</div>
+          <div class="card-desc">Enter your NRIC to proceed to flat selection.</div>
+
+          <div v-if="error" class="error-msg">{{ error }}</div>
+
+          <label>NRIC</label>
+          <input type="text" v-model="nric" placeholder="e.g. S8501234A" maxlength="9" @keyup.enter="login" style="text-transform: uppercase;" />
+
+          <button class="btn btn-primary" @click="login" :disabled="loading || !nric">
+            <span v-if="loading" class="spinner"></span>
+            {{ loading ? 'Verifying...' : 'Proceed to Flat Selection' }}
+          </button>
+        </div>
+      </template>
+
+      <!-- ============ STEP 2: SELECT FLAT ============ -->
+      <template v-if="step === 2">
+        <div class="card">
+          <div class="card-title">Select Your Flat</div>
+          <div class="card-desc">
+            Applicant: {{ applicantName }} — Selection #{{ selectionId }} — Queue #{{ selectionData.queue_number }}
+          </div>
+
+          <div v-if="error" class="error-msg">{{ error }}</div>
+
+          <div v-if="loadingFlats" style="text-align:center; padding: 40px; color: var(--hdb-muted);">
+            Loading available flats...
+          </div>
+
+          <div v-else>
+            <label>Available Flats</label>
+            <div class="flat-grid">
+              <div
+                v-for="flat in flats"
+                :key="flat.flat_id"
+                class="flat-card"
+                :class="{
+                  selected: selectedFlat && selectedFlat.flat_id === flat.flat_id,
+                  unavailable: flat.status !== 'available'
+                }"
+                @click="flat.status === 'available' && (selectedFlat = flat)"
+              >
+                <div class="flat-status" :class="flat.status">{{ flat.status }}</div>
+                <div class="flat-type">{{ flat.flat_type }}</div>
+                <div class="flat-unit">Blk {{ flat.block }} #{{ String(flat.floor_number).padStart(2,'0') }}-{{ flat.unit_number }}</div>
+                <div class="flat-detail">{{ flat.street_name }}</div>
+                <div class="flat-detail">{{ flat.area_sqm }} sqm</div>
+                <div class="flat-price">${{ Number(flat.price).toLocaleString() }}</div>
+              </div>
+            </div>
+
+            <button
+              class="btn btn-primary"
+              @click="confirmSelection"
+              :disabled="!selectedFlat || loading"
+            >
+              <span v-if="loading" class="spinner"></span>
+              <template v-if="!loading">Confirm & Pay Option Fee ($550)</template>
+              <template v-else-if="paymentPhase === 'initiating'">Initiating Payment...</template>
+              <template v-else-if="paymentPhase === 'waiting'">Complete payment in new tab...</template>
+              <template v-else-if="paymentPhase === 'confirming'">Waiting for payment confirmation...</template>
+              <template v-else>Processing...</template>
+            </button>
+
+            <div v-if="paymentPhase === 'waiting' || paymentPhase === 'confirming'" style="margin-top: 16px; padding: 16px; background: #fef8e8; border: 1px solid #f0d68a; border-radius: 8px; font-size: 14px; color: #7a6412;">
+              A new tab has opened for eNETS payment. Please complete the payment there using your test card details. This page will update automatically once payment is confirmed (up to 3 minutes).
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ============ STEP 3: RESULT ============ -->
+      <template v-if="step === 3">
+        <div class="card result-center">
+          <!-- SUCCESS -->
+          <template v-if="result && result.status === 'confirmed'">
+            <div class="result-icon success">✅</div>
+            <div class="card-title" style="color: var(--hdb-green);">Flat Confirmed!</div>
+            <div class="card-desc">Your flat selection has been confirmed and payment processed.</div>
+
+            <div style="text-align: left; margin-top: 20px;">
+              <div class="detail-row">
+                <span class="detail-label">Flat ID</span>
+                <span class="detail-value">{{ result.flat_id }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Flat</span>
+                <span class="detail-value">Blk {{ selectedFlat.block }} #{{ String(selectedFlat.floor_number).padStart(2,'0') }}-{{ selectedFlat.unit_number }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Type</span>
+                <span class="detail-value">{{ selectedFlat.flat_type }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Price</span>
+                <span class="detail-value">${{ Number(selectedFlat.price).toLocaleString() }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Option Fee Paid</span>
+                <span class="detail-value">${{ Number(result.payment_amount).toLocaleString() }}</span>
+              </div>
+              <div class="detail-row" v-if="result.transaction_id">
+                <span class="detail-label">Transaction ID</span>
+                <span class="detail-value">{{ result.transaction_id }}</span>
+              </div>
+            </div>
+          </template>
+
+          <!-- FAILURE -->
+          <template v-else>
+            <div class="result-icon fail">❌</div>
+            <div class="card-title" style="color: var(--hdb-red);">Selection Failed</div>
+            <div class="card-desc">{{ result ? result.message : error }}</div>
+          </template>
+
+          <br/>
+          <button class="btn btn-secondary" @click="reset">Start Over</button>
+        </div>
+      </template>
+
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8000/api';
+
+    const { createApp, ref } = Vue;
+
+    createApp({
+      setup() {
+        const step = ref(1);
+        const loading = ref(false);
+        const loadingFlats = ref(false);
+        const error = ref('');
+
+        // Step 1
+        const nric = ref('');
+        const applicantId = ref(null);
+        const applicantName = ref('');
+        const selectionId = ref(null);
+        const selectionData = ref({});
+
+        // Step 2
+        const flats = ref([]);
+        const selectedFlat = ref(null);
+
+        // Step 3
+        const result = ref(null);
+
+        // ---- Step 1: Login / Verify ----
+        async function login() {
+          error.value = '';
+          loading.value = true;
+          try {
+            const nricUpper = nric.value.trim().toUpperCase();
+
+            // Look up applicant by NRIC
+            const appRes = await fetch(`${API_BASE}/applicant/nric/${nricUpper}`);
+            const appData = await appRes.json();
+            if (appRes.status !== 200) throw new Error(appData.message || 'Applicant not found for this NRIC');
+
+            applicantId.value = appData.data.applicant_id;
+            applicantName.value = appData.data.name;
+
+            // Auto-fetch their selection record
+            const selRes = await fetch(`${API_BASE}/flat-selection`);
+            const selData = await selRes.json();
+            if (selRes.status !== 200) throw new Error('No selections found');
+
+            // Find a selection belonging to this applicant
+            const match = selData.data.find(s =>
+              s.applicant_id === applicantId.value &&
+              ['balloted', 'selecting', 'submitted'].includes(s.status)
+            );
+            if (!match) throw new Error(`No active ballot found for NRIC ${nricUpper}`);
+
+            selectionId.value = match.selection_id;
+            selectionData.value = match;
+
+            // Load flats
+            step.value = 2;
+            await loadFlats();
+          } catch (e) {
+            error.value = e.message;
+          } finally {
+            loading.value = false;
+          }
+        }
+
+        // ---- Load available flats ----
+        async function loadFlats() {
+          loadingFlats.value = true;
+          try {
+            const res = await fetch(`${API_BASE}/flats`);
+            const data = await res.json();
+            if (res.status === 200) {
+              flats.value = data.data;
+            } else {
+              flats.value = [];
+            }
+          } catch (e) {
+            error.value = 'Failed to load flats: ' + e.message;
+          } finally {
+            loadingFlats.value = false;
+          }
+        }
+
+        // ---- Step 2: Confirm & Pay ----
+        const paymentPhase = ref(''); // '', 'initiating', 'waiting', 'confirming'
+
+        async function confirmSelection() {
+          error.value = '';
+          loading.value = true;
+          paymentPhase.value = 'initiating';
+
+          try {
+            // Step 1: Call NETS to initiate payment and get gateway URL
+            const payRes = await fetch(`${API_BASE}/payment`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                applicant_id: applicantId.value,
+                amount: 550.00,
+                description: `BTO Option Fee for Flat ${selectedFlat.value.flat_id}`
+              })
+            });
+            const payData = await payRes.json();
+
+            if (payRes.status !== 200) {
+              throw new Error(payData.message || 'Failed to initiate payment');
+            }
+
+            const { merchant_txn_ref, gateway_url, payload, hmac, api_key_id } = payData.data;
+
+            // Step 2: Open eNETS payment page in a new tab using NETS JS plugin
+            paymentPhase.value = 'waiting';
+
+            const newTab = window.open('', '_blank');
+            if (newTab) {
+              newTab.document.write(`
+                <html>
+                <head>
+                  <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+                  <title>eNETS Payment</title>
+                  <script src="https://uat2.enets.sg/GW2/js/jquery-3.1.1.min.js"><\/script>
+                  <script src="https://uat2.enets.sg/GW2/pluginpages/env.jsp"><\/script>
+                  <script src="https://uat2.enets.sg/GW2/js/apps.js"><\/script>
+                </head>
+                <body>
+                  <form>
+                    <input type="hidden" id="txnReq" name="txnReq" value='${payload}' />
+                    <input type="hidden" id="keyId" name="keyId" value="${api_key_id}" />
+                    <input type="hidden" id="hmac" name="hmac" value="${hmac}" />
+                  </form>
+                  <div id="anotherSection">
+                    <fieldset>
+                      <div id="ajaxResponse"></div>
+                    </fieldset>
+                  </div>
+                  <p style="font-family: sans-serif; color: #666; text-align: center; margin-top: 40px;">Loading eNETS payment...</p>
+                  <script>
+                    window.onload = function() {
+                      var txnReq = document.forms[0].txnReq.value;
+                      var keyId = document.forms[0].keyId.value;
+                      var hmac = document.forms[0].hmac.value;
+                      sendPayLoad(txnReq, hmac, keyId);
+                    };
+                  <\/script>
+                </body>
+                </html>
+              `);
+              newTab.document.close();
+            } else {
+              throw new Error('Pop-up blocked. Please allow pop-ups and try again.');
+            }
+
+            // Step 3: Call orchestrator with merchant_txn_ref
+            // This will poll for up to 3 minutes waiting for eNETS callback
+            paymentPhase.value = 'confirming';
+            const res = await fetch(`${API_BASE}/allocate/select-flat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                applicant_id: applicantId.value,
+                selection_id: selectionId.value,
+                flat_id: selectedFlat.value.flat_id,
+                payment_amount: 550.00,
+                merchant_txn_ref: merchant_txn_ref
+              })
+            });
+            const data = await res.json();
+
+            result.value = data.data || { message: data.message, status: 'failed' };
+            step.value = 3;
+          } catch (e) {
+            error.value = 'Request failed: ' + e.message;
+          } finally {
+            loading.value = false;
+            paymentPhase.value = '';
+          }
+        }
+
+        // ---- Reset ----
+        function reset() {
+          step.value = 1;
+          nric.value = '';
+          applicantId.value = null;
+          applicantName.value = '';
+          selectionId.value = null;
+          selectionData.value = {};
+          flats.value = [];
+          selectedFlat.value = null;
+          result.value = null;
+          error.value = '';
+        }
+
+        return {
+          step, loading, loadingFlats, error,
+          nric, applicantId, applicantName, selectionId, selectionData,
+          flats, selectedFlat, result, paymentPhase,
+          login, confirmSelection, reset
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

@@ -79,13 +79,11 @@ def generate_merchant_txn_ref():
 
 
 def compute_hmac(payload_json, secret_key):
-    """
-    Compute the HMAC-SHA256 signature for the eNETS payload.
-    The HMAC is computed over the JSON payload string concatenated with the secret key.
-    Returns a Base64-encoded string.
-    """
-    message = payload_json + secret_key
-    hmac_digest = hashlib.sha256(message.encode('utf-8')).digest()
+    hmac_digest = hmac.new(
+        secret_key.encode('utf-8'),
+        payload_json.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
     return base64.b64encode(hmac_digest).decode('utf-8')
 
 
@@ -117,7 +115,7 @@ def build_txn_req(amount_cents, merchant_txn_ref, description, currency='SGD'):
             "merchantTxnRef": merchant_txn_ref,
             "merchantTxnDtm": now.strftime('%Y%m%d %H:%M:%S.000'),
             "paymentType": "SALE",
-            "paymentMode": "CC",
+            "paymentMode": "",
             "currencyCode": currency,
             "merchantTimeZone": "+8:00",
             "b2sTxnEndURL": f"{NETS_CALLBACK_BASE}/payment/b2s-callback",

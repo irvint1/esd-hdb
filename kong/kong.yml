@@ -3,7 +3,7 @@ _format_version: "3.0"
 services:
   # Applicant Service
   - name: applicant-service
-    url: http://applicant:5001
+    url: http://applicant:5001/applicant
     routes:
       - name: applicant-route
         paths:
@@ -12,7 +12,7 @@ services:
 
   # Flat Availability Service
   - name: flat-availability-service
-    url: http://flat_availability:5006
+    url: http://flat_availability:5006/flats
     routes:
       - name: flat-availability-route
         paths:
@@ -21,7 +21,7 @@ services:
 
   # Flat Selection Service
   - name: flat-selection-service
-    url: http://flat_selection:5002
+    url: http://flat_selection:5002/flat-selection
     routes:
       - name: flat-selection-route
         paths:
@@ -30,7 +30,7 @@ services:
 
   # NETS Payment Service
   - name: nets-payment-service
-    url: http://nets_payment:5003
+    url: http://nets_payment:5003/payment
     routes:
       - name: nets-payment-route
         paths:
@@ -56,6 +56,24 @@ services:
         strip_path: true
 
 plugins:
+  # CORS - allow frontend to call Kong
+  - name: cors
+    config:
+      origins:
+        - "http://localhost:5173"
+        - "http://localhost:3000"
+        - "http://127.0.0.1:5173"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      headers:
+        - Content-Type
+        - Authorization
+      credentials: true
+
   # Rate limiting on flat allocation (prevent spam selection attempts)
   - name: rate-limiting
     service: flat-allocation-service
