@@ -52,7 +52,31 @@ services:
     depends_on:
       - ballot-audits-db
     restart: always
+  projects-db:
+    image: mysql:8.0
+    container_name: projects_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: projects
+    ports:
+      - "3309:3306"
+    volumes:
+      - projects_db_data:/var/lib/mysql
+      - ./projects/projects.sql:/docker-entrypoint-initdb.d/projects.sql:ro
+    restart: always
+  projects-service:
+    build:
+      context: ./projects
+    container_name: projects_service
+    ports:
+      - "6004:5000"
+    environment:
+      DATABASE_URL: mysql+mysqlconnector://root:root@projects-db:3306/projects
+    depends_on:
+      - projects-db
+    restart: always
 
 volumes:
   applicant_db_data:
   ballot_audits_db_data:
+  projects_db_data:
