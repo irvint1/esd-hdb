@@ -208,7 +208,7 @@ def run_ballot_bucket_logic(data):
 
     return response
 
-@app.route('/ballot/run-bucket', methods=['POST'])
+@app.route('/ballot/run-bucket', methods=['GET'])
 def run_ballot_bucket():
     """
     Run ballot for one town and flat type
