@@ -215,55 +215,6 @@ def run_ballot_bucket():
     ---
     tags:
       - Ballot
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required:
-              - ballotRunId
-              - exerciseId
-              - projectIds
-              - flatType
-              - availableCount
-              - applications
-            properties:
-              ballotRunId:
-                type: integer
-                example: 15
-              exerciseId:
-                type: integer
-                example: 1
-              projectIds:
-                type: array
-                items:
-                  type: integer
-                example: [11, 12]
-              flatType:
-                type: string
-                example: 4-Room
-              availableCount:
-                type: integer
-                example: 280
-              applications:
-                type: array
-                items:
-                  type: object
-                  required:
-                    - applicationId
-                    - finalChances
-                  properties:
-                    applicationId:
-                      type: integer
-                      example: 101
-                    ballotScheme:
-                      type: string
-                      nullable: true
-                      example: FPPS
-                    finalChances:
-                      type: integer
-                      example: 4
     responses:
       200:
         description: Ballot completed successfully
@@ -295,4 +246,4 @@ def run_ballot_bucket():
 
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

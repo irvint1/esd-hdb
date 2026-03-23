@@ -1,5 +1,9 @@
--- ballot_audit.sql
+-- Ballot Audit Service Database
+CREATE DATABASE IF NOT EXISTS ballot_audit;
+USE ballot_audit;
 
+
+-- ballot_audit.sql
 CREATE TABLE IF NOT EXISTS ballot_audit (
     audit_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     exercise_id BIGINT NOT NULL,

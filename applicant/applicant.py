@@ -3,9 +3,12 @@ from flask_sqlalchemy import SQLAlchemy
 import re
 from datetime import datetime
 from flasgger import Swagger
+import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/applicant'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL', 'mysql+mysqlconnector://root@localhost:3306/applicant'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
@@ -312,4 +315,4 @@ def find_by_nric(nric):
     }), 404
 
 if __name__ == '__main__':
-    app.run(port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)

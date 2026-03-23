@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   ballot-service:
     build:
@@ -7,6 +5,54 @@ services:
     container_name: ballot_service
     ports:
       - "6001:5000"
-    volumes:
-      - ./applicant-service:/app
     restart: always
+  applicant-db:
+    image: mysql:8.0
+    container_name: applicant_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: applicant
+    ports:
+      - "3307:3306"
+    volumes:
+      - applicant_db_data:/var/lib/mysql
+      - ./applicant/applicant.sql:/docker-entrypoint-initdb.d/applicant.sql:ro
+    restart: always
+  applicant-service:
+    build:
+      context: ./applicant
+    container_name: applicant_service
+    ports:
+      - "6002:5001"
+    environment:
+      DATABASE_URL: mysql+mysqlconnector://root:root@applicant-db:3306/applicant
+    depends_on:
+      - applicant-db
+    restart: always
+  ballot-audit-db:
+    image: mysql:8.0
+    container_name: ballot_audit_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ballot_audit
+    ports:
+      - "3308:3306"
+    volumes:
+      - ballot_audit_db_data:/var/lib/mysql
+      - ./ballot-audit/ballot_audit.sql:/docker-entrypoint-initdb.d/ballot_audit.sql:ro
+    restart: always
+  ballot-audit-service:
+    build:
+      context: ./ballot-audit
+    container_name: ballot_audit_service
+    ports:
+      - "6003:5000"
+    environment:
+      DATABASE_URL: mysql+mysqlconnector://root:root@ballot-audit-db:3306/ballot_audit
+    depends_on:
+      - ballot-audit-db
+    restart: always
+
+volumes:
+  applicant_db_data:
+  ballot_audit_db_data:
