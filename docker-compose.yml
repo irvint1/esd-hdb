@@ -29,30 +29,30 @@ services:
     depends_on:
       - applicant-db
     restart: always
-  ballot-audit-db:
+  ballot-audits-db:
     image: mysql:8.0
-    container_name: ballot_audit_db
+    container_name: ballot_audits_db
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: ballot_audit
+      MYSQL_DATABASE: ballot_audits
     ports:
       - "3308:3306"
     volumes:
-      - ballot_audit_db_data:/var/lib/mysql
-      - ./ballot-audit/ballot_audit.sql:/docker-entrypoint-initdb.d/ballot_audit.sql:ro
+      - ballot_audits_db_data:/var/lib/mysql
+      - ./ballot-audits/ballot_audits.sql:/docker-entrypoint-initdb.d/ballot_audits.sql:ro
     restart: always
-  ballot-audit-service:
+  ballot-audits-service:
     build:
-      context: ./ballot-audit
-    container_name: ballot_audit_service
+      context: ./ballot-audits
+    container_name: ballot_audits_service
     ports:
       - "6003:5000"
     environment:
-      DATABASE_URL: mysql+mysqlconnector://root:root@ballot-audit-db:3306/ballot_audit
+      DATABASE_URL: mysql+mysqlconnector://root:root@ballot-audits-db:3306/ballot_audits
     depends_on:
-      - ballot-audit-db
+      - ballot-audits-db
     restart: always
 
 volumes:
   applicant_db_data:
-  ballot_audit_db_data:
+  ballot_audits_db_data:
