@@ -10,29 +10,22 @@ app = Flask(__name__)
 CORS(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-    'DATABASE_URL', 'mysql+mysqlconnector://root@localhost:3306/flat_availability'
+    'DATABASE_URL', 'mysql+mysqlconnector://root@localhost:3306/flats'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
 db = SQLAlchemy(app)
 
+
 app.config['SWAGGER'] = {
-    'title': 'Flat Availability Microservice API',
+    'title': 'Flats Microservice API',
     'version': 1.0,
     'openapi': '3.0.2',
-    'description': 'Manages flat availability and reservations'
+    'description': 'Manages flats and reservations'
 }
 
 swagger = Swagger(app)
-
-
-class BtoProject(db.Model):
-    __tablename__ = 'bto_project'
-
-    project_id = db.Column(db.Integer, primary_key=True)
-    project_name = db.Column(db.String(128), nullable=False)
-    town = db.Column(db.String(64), nullable=False)
 
 
 class Flat(db.Model):
@@ -51,9 +44,10 @@ class Flat(db.Model):
     reserved_by = db.Column(db.String(64), nullable=True)
     reserved_at = db.Column(db.DateTime, nullable=True)
 
-    def json(self, project=None):
-        data = {
+    def json(self):
+        return {
             "flat_id": self.flat_id,
+            "project_id": self.project_id,
             "block": self.block,
             "street_name": self.street_name,
             "floor_number": self.floor_number,
@@ -66,12 +60,6 @@ class Flat(db.Model):
             "reserved_at": self.reserved_at.isoformat() if self.reserved_at else None,
         }
 
-        if project is not None:
-            data["project_name"] = project.project_name
-            data["town"] = project.town
-
-        return data
-
 
 def is_positive_int(value):
     return isinstance(value, int) and value > 0
@@ -83,6 +71,23 @@ def is_non_empty_int_list(values):
 
 def is_valid_flat_type(value):
     return isinstance(value, str) and value.strip() != ''
+
+
+def parse_optional_positive_int(value, field_name):
+    if value is None:
+        return None
+
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be a positive integer.") from exc
+
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be a positive integer.")
+
+    return parsed
+
+
 
 
 def get_available_counts_query(project_ids=None, project_id=None, flat_type=None):
@@ -159,31 +164,38 @@ def get_available_flats():
       500:
         description: Error retrieving flats
     """
-    town = request.args.get('town')
     flat_type = request.args.get('flat_type')
     project_id = request.args.get('project_id')
 
     try:
-        query = (
-            select(Flat, BtoProject)
-            .join(BtoProject, Flat.project_id == BtoProject.project_id)
-            .where(Flat.status == 'available')
-        )
-        if town:
-            query = query.where(BtoProject.town == town)
+        parsed_project_id = parse_optional_positive_int(project_id, 'project_id')
+    except ValueError as error:
+        return jsonify({
+            "code": 400,
+            "message": str(error)
+        }), 400
+
+    try:
+        query = select(Flat).where(Flat.status == 'available')
         if flat_type:
             query = query.where(Flat.flat_type == flat_type)
-        if project_id:
-            query = query.where(Flat.project_id == int(project_id))
+        if parsed_project_id is not None:
+            query = query.where(Flat.project_id == parsed_project_id)
 
-        query = query.order_by(BtoProject.town, Flat.block, Flat.floor_number, Flat.unit_number)
+        query = query.order_by(Flat.block, Flat.floor_number, Flat.unit_number)
 
-        rows = db.session.execute(query).all()
-        flats = [flat.json(project) for flat, project in rows]
+        flats = db.session.scalars(query).all()
+        if not flats:
+            return jsonify({
+                "code": 200,
+                "data": []
+            }), 200
+
+        flats_payload = [flat.json() for flat in flats]
 
         return jsonify({
             "code": 200,
-            "data": flats
+            "data": flats_payload
         }), 200
 
     except Exception as e:
@@ -209,24 +221,17 @@ def get_flat(flat_id):
         description: Error retrieving flat
     """
     try:
-        query = (
-            select(Flat, BtoProject)
-            .join(BtoProject, Flat.project_id == BtoProject.project_id)
-            .where(Flat.flat_id == flat_id)
-        )
-        row = db.session.execute(query).first()
+        flat = db.session.get(Flat, flat_id)
 
-        if not row:
+        if not flat:
             return jsonify({
                 "code": 404,
                 "message": f"Flat {flat_id} not found."
             }), 404
 
-        flat, project = row
-
         return jsonify({
             "code": 200,
-            "data": flat.json(project)
+            "data": flat.json()
         }), 200
 
     except Exception as e:
@@ -390,53 +395,6 @@ def get_all_available_flat_counts():
         }), 500
 
 
-@app.route('/flats/available-counts/<int:project_id>', methods=['GET'])
-def get_project_available_flat_counts(project_id):
-    """
-    Get available flat counts for one project
-    ---
-    tags:
-      - Flat Availability
-    responses:
-      200:
-        description: Available flat counts for the project retrieved successfully
-      400:
-        description: Invalid flat type filter
-      500:
-        description: Error retrieving flat counts
-    """
-    flat_type = request.args.get('flat_type')
-
-    if flat_type is not None and not is_valid_flat_type(flat_type):
-        return jsonify({
-            "code": 400,
-            "message": ["flat_type must be a non-empty string when provided."]
-        }), 400
-
-    try:
-        rows = db.session.execute(
-            get_available_counts_query(project_id=project_id, flat_type=flat_type)
-        ).all()
-
-        return jsonify({
-            "code": 200,
-            "data": {
-                "projectId": project_id,
-                "counts": [
-                    {
-                        "flatType": row.flat_type,
-                        "availableCount": row.available_count
-                    }
-                    for row in rows
-                ]
-            }
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "code": 500,
-            "message": f"Error retrieving flat counts: {str(e)}"
-        }), 500
 
 
 @app.route('/flats/available-counts/projects', methods=['GET'])

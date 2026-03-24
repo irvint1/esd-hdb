@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 5006
 
-CMD ["python", "flat_availability.py"]
+CMD ["python", "flats.py"]

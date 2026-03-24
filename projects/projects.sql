@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS projects (
 
 -- Sample records aligned with exercise_id values used in other services
 INSERT INTO projects (project_id, project_name, town, exercise_id) VALUES
+(1, 'Tengah Garden Walk', 'Tengah', 1),
+(2, 'Woodlands North Vista', 'Woodlands', 1),
 (11, 'Bedok North Bloom', 'Bedok', 1),
 (12, 'Tampines GreenCourt', 'Tampines', 1),
 (13, 'Yishun RiverVale', 'Yishun', 1),
