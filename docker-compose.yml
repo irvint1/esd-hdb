@@ -75,8 +75,58 @@ services:
     depends_on:
       - projects-db
     restart: always
+  flat-selection-db:
+    image: mysql:8.0
+    container_name: flat_selection_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: flat_selection
+    ports:
+      - "3310:3306"
+    volumes:
+      - flat_selection_db_data:/var/lib/mysql
+      - ./flat_selection/flat_selection.sql:/docker-entrypoint-initdb.d/flat_selection.sql:ro
+    restart: always
+  flat-selection-service:
+    build:
+      context: ./flat_selection
+      dockerfile: Dockerfile.txt
+    container_name: flat_selection_service
+    ports:
+      - "6005:5002"
+    environment:
+      DATABASE_URL: mysql+mysqlconnector://root:root@flat-selection-db:3306/flat_selection
+    depends_on:
+      - flat-selection-db
+    restart: always
+  flat-availability-db:
+    image: mysql:8.0
+    container_name: flat_availability_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: flat_availability
+    ports:
+      - "3311:3306"
+    volumes:
+      - flat_availability_db_data:/var/lib/mysql
+      - ./flat_availability/flat_availability.sql:/docker-entrypoint-initdb.d/flat_availability.sql:ro
+    restart: always
+  flat-availability-service:
+    build:
+      context: ./flat_availability
+      dockerfile: Dockerfile.txt
+    container_name: flat_availability_service
+    ports:
+      - "6006:5006"
+    environment:
+      DATABASE_URL: mysql+mysqlconnector://root:root@flat-availability-db:3306/flat_availability
+    depends_on:
+      - flat-availability-db
+    restart: always
 
 volumes:
   applicant_db_data:
   ballot_audits_db_data:
   projects_db_data:
+  flat_selection_db_data:
+  flat_availability_db_data:

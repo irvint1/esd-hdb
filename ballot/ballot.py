@@ -56,9 +56,6 @@ def validate_ballot_request(data):
     if not isinstance(data, dict):
         return ['Request body must be valid JSON.']
 
-    if data.get('ballotRunId') is None:
-        errors.append('ballotRunId is required.')
-
     if data.get('exerciseId') is None:
         errors.append('exerciseId is required.')
 
@@ -200,7 +197,6 @@ def run_ballot_bucket_logic(data):
     random.shuffle(final_queue_apps)
 
     response = build_ballot_results(selected_apps, unsuccessful_apps, available_count)
-    response['ballotRunId'] = data['ballotRunId']
     response['exerciseId'] = data['exerciseId']
     response['projectIds'] = data['projectIds']
     response['flatType'] = data['flatType']
