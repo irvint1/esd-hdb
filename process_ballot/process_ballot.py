@@ -579,55 +579,62 @@ def run_ballot_for_group(group_applications, chance_map, group_context=None):
     return normalised_results, warnings
 
 
-# Creates flat selection entry.
-def create_flat_selection_entry(
-    project_id,
-    queue_number,
-    application_id,
-    applicant_nric,
-    co_applicant_nric=None,
-):
-    """Create one entry in the flat selection service."""
-    request_payload = {
-        "application_id": application_id,
-        "project_id": project_id,
-        "queue_number": queue_number,
-    }
-    if isinstance(applicant_nric, str) and applicant_nric.strip():
-        request_payload["applicant_nric"] = applicant_nric.strip().upper()
-    if isinstance(co_applicant_nric, str) and co_applicant_nric.strip():
-        request_payload["co_applicant_nric"] = co_applicant_nric.strip().upper()
+# Creates flat selection entries in bulk.
+def create_flat_selection_entries_bulk(records, town_name=None, flat_type=None):
+    """Create many flat-selection entries in one call and return result map by application_id."""
+    if not isinstance(records, list) or not records:
+        return {}
 
-    status_code, response_payload = request_json(
+    request_payload = {"records": records}
+    if isinstance(town_name, str) and town_name.strip():
+        request_payload["town_name"] = town_name.strip()
+    if isinstance(flat_type, str) and flat_type.strip():
+        request_payload["flat_type"] = flat_type.strip()
+
+    _, response_payload = request_json(
         "POST",
-        f"{FLAT_SELECTION_SERVICE_URL}/flat-selection",
+        f"{FLAT_SELECTION_SERVICE_URL}/flat-selection/bulk",
         json_body=request_payload,
-        allowed_statuses=(201, 409),
+        allowed_statuses=(200, 201),
     )
-    if status_code == 409:
-        message = response_payload.get("message")
-        if not isinstance(message, str) or not message.strip():
-            message = f"Application {application_id} already has a flat-selection record."
-        log_action(
-            "Flat selection entry already exists",
-            application_id=application_id,
-            project_id=project_id,
-            queue_number=queue_number,
-            detail=message,
+
+    data = response_payload.get("data")
+    raw_results = data.get("results") if isinstance(data, dict) else None
+    if not isinstance(raw_results, list):
+        raise BallotOrchestrationError(
+            "Flat selection bulk endpoint returned an invalid payload.",
+            502,
         )
-        return {
-            "created": False,
-            "selection_id": None,
+
+    result_map = {}
+    for row in raw_results:
+        if not isinstance(row, dict):
+            continue
+
+        application_id = row.get("application_id")
+        if not is_positive_int(application_id):
+            continue
+
+        created = bool(row.get("created"))
+        existing = bool(row.get("existing"))
+        selection_id = row.get("selection_id")
+        message = row.get("message")
+        if not isinstance(message, str) or not message.strip():
+            if created:
+                message = "Flat selection entry created."
+            elif existing:
+                message = f"Application {application_id} already has a flat-selection record."
+            else:
+                message = "Flat selection entry was not created."
+
+        result_map[application_id] = {
+            "created": created,
+            "existing": existing,
+            "selection_id": selection_id if isinstance(selection_id, int) else None,
             "message": message,
         }
 
-    data = response_payload.get("data")
-    selection_id = data.get("selection_id") if isinstance(data, dict) else None
-    return {
-        "created": isinstance(selection_id, int),
-        "selection_id": selection_id if isinstance(selection_id, int) else None,
-        "message": "Flat selection entry created.",
-    }
+    return result_map
 
 
 # Processes project.
@@ -704,6 +711,8 @@ def process_project(project, applications, chance_map):
         group_write_failures = 0
         group_entries = []
         group_queue_start = 1 if ballot_results else 0
+        group_bulk_records = []
+        group_entries_pending_bulk = []
 
         group_lookup = {
             item.get("application_id"): item
@@ -724,49 +733,6 @@ def process_project(project, applications, chance_map):
             flat_type = application.get("flat_type")
             chances = chance_map.get(application_id, {"final_chance": 2})
 
-            selection_result = {
-                "created": False,
-                "selection_id": None,
-                "message": "Skipped because application payload is incomplete.",
-            }
-
-            if not main_applicant_nric:
-                selection_result["message"] = "Skipped because main_applicant_nric is missing."
-                warnings.append(
-                    f"Skipped flat-selection write for application {application_id}: main_applicant_nric is missing."
-                )
-                group_write_failures += 1
-            else:
-                try:
-                    selection_result = create_flat_selection_entry(
-                        project_id,
-                        queue_number,
-                        application_id,
-                        main_applicant_nric,
-                        co_applicant_nric,
-                    )
-                    if selection_result["created"]:
-                        created_entries += 1
-                        group_created_entries += 1
-                        selection_result["message"] = "Queue entry created."
-                    else:
-                        if "already has a flat-selection record" in str(selection_result.get("message", "")):
-                            group_existing_entries += 1
-                        else:
-                            group_write_failures += 1
-                except BallotOrchestrationError as exc:
-                    warning = (
-                        f"Unable to write flat selection entry for application {application_id} "
-                        f"(project {project_id}, queue {queue_number}): {exc.message}"
-                    )
-                    warnings.append(warning)
-                    group_write_failures += 1
-                    selection_result = {
-                        "created": False,
-                        "selection_id": None,
-                        "message": warning,
-                    }
-
             entry = {
                 "application_id": application_id,
                 "main_applicant_nric": main_applicant_nric,
@@ -777,10 +743,99 @@ def process_project(project, applications, chance_map):
                 "ticket_weight": chances["final_chance"],
                 "queue_number": queue_number,
                 "queue_result": "queued",
-                "flat_selection": selection_result,
+                "flat_selection": {
+                    "created": False,
+                    "selection_id": None,
+                    "message": "Skipped because application payload is incomplete.",
+                },
             }
+
+            if not main_applicant_nric:
+                entry["flat_selection"]["message"] = "Skipped because main_applicant_nric is missing."
+                warnings.append(
+                    f"Skipped flat-selection write for application {application_id}: main_applicant_nric is missing."
+                )
+                group_write_failures += 1
+            else:
+                group_bulk_records.append(
+                    {
+                        "application_id": application_id,
+                        "project_id": project_id,
+                        "queue_number": queue_number,
+                        "applicant_nric": main_applicant_nric,
+                        "co_applicant_nric": co_applicant_nric,
+                    }
+                )
+                group_entries_pending_bulk.append(entry)
+                entry["flat_selection"] = {
+                    "created": False,
+                    "selection_id": None,
+                    "message": "Pending flat-selection bulk write.",
+                }
+
             group_entries.append(entry)
             entries.append(entry)
+
+        if group_bulk_records:
+            try:
+                bulk_results = create_flat_selection_entries_bulk(
+                    group_bulk_records,
+                    town_name=group_town_name,
+                    flat_type=group_flat_type,
+                )
+
+                for entry in group_entries_pending_bulk:
+                    application_id = entry["application_id"]
+                    selection_result = bulk_results.get(application_id)
+                    if not isinstance(selection_result, dict):
+                        warning = (
+                            f"Unable to find flat-selection bulk result for application {application_id} "
+                            f"(project {project_id}, queue {entry['queue_number']})."
+                        )
+                        warnings.append(warning)
+                        group_write_failures += 1
+                        entry["flat_selection"] = {
+                            "created": False,
+                            "selection_id": None,
+                            "message": warning,
+                        }
+                        continue
+
+                    if selection_result["created"]:
+                        created_entries += 1
+                        group_created_entries += 1
+                        entry["flat_selection"] = {
+                            "created": True,
+                            "selection_id": selection_result["selection_id"],
+                            "message": "Queue entry created.",
+                        }
+                    elif selection_result["existing"]:
+                        group_existing_entries += 1
+                        entry["flat_selection"] = {
+                            "created": False,
+                            "selection_id": selection_result["selection_id"],
+                            "message": selection_result["message"],
+                        }
+                    else:
+                        group_write_failures += 1
+                        entry["flat_selection"] = {
+                            "created": False,
+                            "selection_id": selection_result["selection_id"],
+                            "message": selection_result["message"],
+                        }
+            except BallotOrchestrationError as exc:
+                warning = (
+                    f"Unable to write flat selection entries in bulk for project {project_id}, "
+                    f"town {group_town_name}, flat_type {group_flat_type}: {exc.message}"
+                )
+                warnings.append(warning)
+                group_write_failures += len(group_entries_pending_bulk)
+                for entry in group_entries_pending_bulk:
+                    entry["flat_selection"] = {
+                        "created": False,
+                        "selection_id": None,
+                        "message": warning,
+                    }
 
         group_queue_end = len(ballot_results)
 

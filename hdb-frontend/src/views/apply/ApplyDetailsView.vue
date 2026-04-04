@@ -111,18 +111,12 @@ function resetApplication() {
   <div class="surface step-card">
     <div class="step-card__copy">
       <h2>Application Details</h2>
-      <p>
-        Complete the household details for everyone included in this flat application, then review the full summary
-        before continuing to payment.
-      </p>
+      <p>Fill in your household details, upload documents, and continue to payment.</p>
     </div>
 
     <div class="workflow-note">
-      <p class="workflow-note__title">Household Member Workflow</p>
-      <p>
-        This flow mirrors the real HDB journey by capturing the main applicant first, then any co-applicant or
-        occupiers, followed by supporting documents and flat preferences before payment.
-      </p>
+      <p class="workflow-note__title">Quick Flow</p>
+      <p>Main applicant, household members, documents, then flat preference.</p>
     </div>
 
     <p v-if="!isCurrentSubmitted" class="progress-note">Progress is saved automatically on this device.</p>
@@ -134,7 +128,7 @@ function resetApplication() {
             <HousePlus :size="20" />
             <h3>Main Applicant</h3>
           </div>
-          <p>Retrieve the main applicant's Singpass details first. Only email and contact number stay editable.</p>
+          <p>Load details from Singpass. Contact number and email stay editable.</p>
         </div>
       </div>
 
@@ -146,19 +140,17 @@ function resetApplication() {
           @click="retrieveMainApplicantFromSingPass"
         >
           <span v-if="isRetrievingMain">Retrieving...</span>
-          <span v-else>Retrieve Main Applicant from Singpass</span>
+          <span v-else>Load Main Applicant from Singpass</span>
         </button>
-        <p class="singpass-retrieve__hint">
-          Enter the main applicant NRIC first to prefill their MyInfo details.
-        </p>
+        <p class="singpass-retrieve__hint">Enter NRIC first.</p>
       </div>
 
-      <p v-if="retrieveMainSuccess" class="retrieve-success">Main applicant details retrieved successfully.</p>
+      <p v-if="retrieveMainSuccess" class="retrieve-success">Main applicant details loaded.</p>
       <div v-if="mainApplicantIdentityLocked" class="locked-banner">
         <LockKeyhole :size="18" />
         <div>
-          <strong>Retrieved via Singpass</strong>
-          <p>Full name, NRIC, date of birth, citizenship status, and marital status are now locked.</p>
+          <strong>Read-only from Singpass</strong>
+          <p>Identity fields cannot be edited.</p>
         </div>
       </div>
       <p v-if="retrieveMainError" class="retrieve-error">{{ retrieveMainError }}</p>
@@ -169,7 +161,7 @@ function resetApplication() {
             <span>Full Name</span>
             <span v-if="mainApplicantIdentityLocked" class="lock-badge">
               <LockKeyhole :size="12" />
-              Locked
+              Read-only
             </span>
           </label>
           <input
@@ -186,7 +178,7 @@ function resetApplication() {
             <span>NRIC</span>
             <span v-if="mainApplicantIdentityLocked" class="lock-badge">
               <LockKeyhole :size="12" />
-              Locked
+              Read-only
             </span>
           </label>
           <input
@@ -203,7 +195,7 @@ function resetApplication() {
             <span>Date of Birth</span>
             <span v-if="mainApplicantIdentityLocked" class="lock-badge">
               <LockKeyhole :size="12" />
-              Locked
+              Read-only
             </span>
           </label>
           <input
@@ -220,7 +212,7 @@ function resetApplication() {
             <span>Monthly Income (SGD)</span>
             <span v-if="mainApplicantIncomeLocked" class="lock-badge">
               <LockKeyhole :size="12" />
-              Locked
+              Read-only
             </span>
           </label>
           <input
@@ -239,7 +231,7 @@ function resetApplication() {
             <span>Citizenship / Residency Status</span>
             <span v-if="mainApplicantIdentityLocked" class="lock-badge">
               <LockKeyhole :size="12" />
-              Locked
+              Read-only
             </span>
           </label>
           <select
@@ -258,7 +250,7 @@ function resetApplication() {
             <span>Marital Status</span>
             <span v-if="mainApplicantIdentityLocked" class="lock-badge">
               <LockKeyhole :size="12" />
-              Locked
+              Read-only
             </span>
           </label>
           <select
@@ -303,7 +295,7 @@ function resetApplication() {
             <Users :size="20" />
             <h3>Household Members</h3>
           </div>
-          <p>Add the co-applicant and occupiers included in this application.</p>
+          <p>Add co-applicant and occupiers.</p>
         </div>
         <div v-if="!isCurrentSubmitted" class="section-actions">
           <button class="btn btn-secondary" type="button" :disabled="hasCoApplicant" @click="addCoApplicant">
@@ -331,7 +323,7 @@ function resetApplication() {
           :key="member.id"
           :member="member"
           :title="`Co-applicant ${index + 1}`"
-          description="Add the person who is applying together with the main applicant."
+          description="Person applying together with the main applicant."
           :disabled="isCurrentSubmitted"
           :relationship-options="relationshipOptions"
           :marital-status-options="maritalStatusOptions"
@@ -346,7 +338,7 @@ function resetApplication() {
           :key="member.id"
           :member="member"
           :title="`Occupier ${index + 1}`"
-          description="List family members who will be included in the household but are not co-applicants."
+          description="Household member who is not a co-applicant."
           :disabled="isCurrentSubmitted"
           :relationship-options="relationshipOptions"
           :marital-status-options="maritalStatusOptions"
@@ -363,7 +355,7 @@ function resetApplication() {
             <FolderInput :size="20" />
             <h3>Supporting Documents</h3>
           </div>
-          <p>Upload the required PDFs after the household details are complete.</p>
+          <p>Upload the required PDFs.</p>
         </div>
       </div>
 
@@ -412,10 +404,7 @@ function resetApplication() {
       </div>
 
       <div class="submit-note">
-        <p>
-          After you confirm the form, these PDFs are sent together with the application to Apply BTO before you are
-          redirected to NETS. The eligibility checks run only after payment succeeds.
-        </p>
+        <p>These PDFs are sent with your application before NETS payment.</p>
       </div>
     </section>
 
@@ -426,7 +415,7 @@ function resetApplication() {
             <HousePlus :size="20" />
             <h3>Flat Preferences</h3>
           </div>
-          <p>Select the preferred town and flat type for this application.</p>
+          <p>Select your preferred town and flat type.</p>
         </div>
       </div>
 
@@ -484,7 +473,7 @@ function resetApplication() {
       :open="showSubmissionSummary"
       eyebrow="Final Review"
       title="Review your application before payment"
-      message="Check the key details below. If anything looks off, go back and edit the form before continuing to payment."
+      message="Check the details below. Go back to edit if needed."
       size="wide"
       confirm-label="Looks Correct, Continue"
       cancel-label="Go Back and Edit"
@@ -774,7 +763,7 @@ function resetApplication() {
 .retrieve-success {
   margin: 0 0 12px;
   font-size: 0.875rem;
-  color: #1a7f37;
+  color: rgba(29, 29, 31, 0.72);
 }
 
 .locked-banner {
@@ -784,8 +773,14 @@ function resetApplication() {
   margin: 0 0 16px;
   padding: 15px 16px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(26, 127, 75, 0.1), rgba(241, 251, 245, 0.96));
-  border: 1px solid rgba(26, 127, 75, 0.18);
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(29, 29, 31, 0.04),
+    rgba(29, 29, 31, 0.04) 10px,
+    rgba(29, 29, 31, 0.08) 10px,
+    rgba(29, 29, 31, 0.08) 20px
+  );
+  border: 1px solid rgba(29, 29, 31, 0.24);
   color: var(--color-charcoal);
 }
 
@@ -840,10 +835,10 @@ function resetApplication() {
 .field-group--locked .field:disabled,
 .field--locked:disabled {
   opacity: 1;
-  color: rgba(29, 29, 31, 0.84);
-  background: linear-gradient(135deg, rgba(26, 127, 75, 0.08), rgba(29, 29, 31, 0.03));
-  border-color: rgba(26, 127, 75, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(26, 127, 75, 0.06);
+  color: rgba(29, 29, 31, 0.86);
+  background: linear-gradient(135deg, rgba(29, 29, 31, 0.04), rgba(29, 29, 31, 0.1));
+  border-color: rgba(29, 29, 31, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(29, 29, 31, 0.12);
   cursor: not-allowed;
 }
 
@@ -853,8 +848,9 @@ function resetApplication() {
   gap: 6px;
   padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(26, 127, 75, 0.12);
-  color: var(--color-green);
+  border: 1px dashed rgba(29, 29, 31, 0.38);
+  background: rgba(29, 29, 31, 0.08);
+  color: rgba(29, 29, 31, 0.78);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;

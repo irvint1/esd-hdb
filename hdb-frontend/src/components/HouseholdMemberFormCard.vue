@@ -84,20 +84,17 @@ async function retrieveFromSingPass() {
       <button class="btn btn-secondary" type="button" :disabled="disabled || isRetrieving" @click="retrieveFromSingPass">
         {{ isRetrieving ? 'Retrieving...' : 'Retrieve from Singpass' }}
       </button>
-      <p class="member-card__hint">Enter the member NRIC / FIN first to prefill their personal details from MyInfo.</p>
+      <p class="member-card__hint">Enter NRIC / FIN first.</p>
     </div>
 
     <p v-if="retrieveSuccess" class="member-card__feedback member-card__feedback--success">
-      MyInfo details retrieved successfully.
+      Member details loaded.
     </p>
     <div v-if="member.isRetrievedFromMyInfo" class="locked-banner">
       <LockKeyhole :size="16" />
       <div>
-        <strong>Retrieved via Singpass</strong>
-        <p>
-          Identity fields are now locked. You can still update relationship, contact number, and email. Income stays
-          editable if it was not provided by MyInfo.
-        </p>
+        <strong>Read-only from Singpass</strong>
+        <p>Identity fields cannot be edited. Relationship, contact number, and email stay editable.</p>
       </div>
     </div>
     <p v-if="retrieveError" class="member-card__feedback member-card__feedback--error">
@@ -111,7 +108,7 @@ async function retrieveFromSingPass() {
           <span>NRIC / FIN</span>
           <span v-if="member.isRetrievedFromMyInfo" class="lock-badge">
             <LockKeyhole :size="12" />
-            Locked
+            Read-only
           </span>
         </label>
         <input
@@ -128,7 +125,7 @@ async function retrieveFromSingPass() {
           <span>Full Name</span>
           <span v-if="member.isRetrievedFromMyInfo" class="lock-badge">
             <LockKeyhole :size="12" />
-            Locked
+            Read-only
           </span>
         </label>
         <input
@@ -145,7 +142,7 @@ async function retrieveFromSingPass() {
           <span>Date of Birth</span>
           <span v-if="member.isRetrievedFromMyInfo" class="lock-badge">
             <LockKeyhole :size="12" />
-            Locked
+            Read-only
           </span>
         </label>
         <input
@@ -162,7 +159,7 @@ async function retrieveFromSingPass() {
           <span>Monthly Income (SGD)</span>
           <span v-if="memberIncomeLocked" class="lock-badge">
             <LockKeyhole :size="12" />
-            Locked
+            Read-only
           </span>
         </label>
         <input
@@ -181,7 +178,7 @@ async function retrieveFromSingPass() {
           <span>Citizenship / Residency Status</span>
           <span v-if="member.isRetrievedFromMyInfo" class="lock-badge">
             <LockKeyhole :size="12" />
-            Locked
+            Read-only
           </span>
         </label>
         <select
@@ -206,7 +203,7 @@ async function retrieveFromSingPass() {
           <span>Marital Status</span>
           <span v-if="member.isRetrievedFromMyInfo" class="lock-badge">
             <LockKeyhole :size="12" />
-            Locked
+            Read-only
           </span>
         </label>
         <select
@@ -323,7 +320,7 @@ async function retrieveFromSingPass() {
 }
 
 .member-card__feedback--success {
-  color: #1a7f37;
+  color: rgba(29, 29, 31, 0.72);
 }
 
 .locked-banner {
@@ -333,8 +330,14 @@ async function retrieveFromSingPass() {
   margin: 0 0 16px;
   padding: 14px 16px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(26, 127, 75, 0.1), rgba(241, 251, 245, 0.96));
-  border: 1px solid rgba(26, 127, 75, 0.18);
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(29, 29, 31, 0.04),
+    rgba(29, 29, 31, 0.04) 10px,
+    rgba(29, 29, 31, 0.08) 10px,
+    rgba(29, 29, 31, 0.08) 20px
+  );
+  border: 1px solid rgba(29, 29, 31, 0.24);
   color: var(--color-charcoal);
 }
 
@@ -364,10 +367,10 @@ async function retrieveFromSingPass() {
 .field-group--locked .field:disabled,
 .field--locked:disabled {
   opacity: 1;
-  color: rgba(29, 29, 31, 0.82);
-  background: linear-gradient(135deg, rgba(26, 127, 75, 0.08), rgba(29, 29, 31, 0.03));
-  border-color: rgba(26, 127, 75, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(26, 127, 75, 0.06);
+  color: rgba(29, 29, 31, 0.86);
+  background: linear-gradient(135deg, rgba(29, 29, 31, 0.04), rgba(29, 29, 31, 0.1));
+  border-color: rgba(29, 29, 31, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(29, 29, 31, 0.12);
   cursor: not-allowed;
 }
 
@@ -377,8 +380,9 @@ async function retrieveFromSingPass() {
   gap: 6px;
   padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(26, 127, 75, 0.12);
-  color: var(--color-green);
+  border: 1px dashed rgba(29, 29, 31, 0.38);
+  background: rgba(29, 29, 31, 0.08);
+  color: rgba(29, 29, 31, 0.78);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;

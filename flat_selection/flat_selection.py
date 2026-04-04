@@ -56,6 +56,48 @@ def parse_positive_int(value):
     return value if value > 0 else None
 
 
+# Validates one selection payload.
+def validate_selection_payload(data, field_prefix=""):
+    if not isinstance(data, dict):
+        label = field_prefix[:-1] if field_prefix.endswith(".") else field_prefix or "record"
+        return None, [f"{label} must be an object."]
+
+    application_id = parse_positive_int(data.get("application_id"))
+    project_id = parse_positive_int(data.get("project_id"))
+    queue_number = parse_positive_int(data.get("queue_number"))
+    applicant_nric = normalise_nric(data.get("applicant_nric"))
+    co_applicant_nric = normalise_nric(data.get("co_applicant_nric"))
+
+    errors = []
+    if application_id is None:
+        errors.append(
+            f"{field_prefix}application_id is required and must be a positive integer."
+        )
+    if project_id is None:
+        errors.append(
+            f"{field_prefix}project_id is required and must be a positive integer."
+        )
+    if queue_number is None:
+        errors.append(
+            f"{field_prefix}queue_number is required and must be a positive integer."
+        )
+    if applicant_nric is None:
+        errors.append(
+            f"{field_prefix}applicant_nric is required and must be a non-empty string."
+        )
+
+    if errors:
+        return None, errors
+
+    return {
+        "application_id": application_id,
+        "project_id": project_id,
+        "queue_number": queue_number,
+        "applicant_nric": applicant_nric,
+        "co_applicant_nric": co_applicant_nric,
+    }, []
+
+
 # Handles to boolean.
 def to_boolean(value):
     if value is None:
@@ -302,20 +344,15 @@ def create_selection():
     if not isinstance(data, dict):
         return jsonify({"code": 400, "message": "Request body must be a JSON object."}), 400
 
-    application_id = parse_positive_int(data.get("application_id"))
-    project_id = parse_positive_int(data.get("project_id"))
-    queue_number = parse_positive_int(data.get("queue_number"))
-    applicant_nric = normalise_nric(data.get("applicant_nric"))
-    co_applicant_nric = normalise_nric(data.get("co_applicant_nric"))
+    cleaned, errors = validate_selection_payload(data)
+    if errors:
+        return jsonify({"code": 400, "message": errors[0]}), 400
 
-    if application_id is None:
-        return jsonify({"code": 400, "message": "application_id is required and must be a positive integer."}), 400
-    if project_id is None:
-        return jsonify({"code": 400, "message": "project_id is required and must be a positive integer."}), 400
-    if queue_number is None:
-        return jsonify({"code": 400, "message": "queue_number is required and must be a positive integer."}), 400
-    if applicant_nric is None:
-        return jsonify({"code": 400, "message": "applicant_nric is required and must be a non-empty string."}), 400
+    application_id = cleaned["application_id"]
+    project_id = cleaned["project_id"]
+    queue_number = cleaned["queue_number"]
+    applicant_nric = cleaned["applicant_nric"]
+    co_applicant_nric = cleaned["co_applicant_nric"]
 
     existing = db.session.scalar(
         db.select(FlatSelection).where(
@@ -345,6 +382,118 @@ def create_selection():
         return jsonify({"code": 500, "message": f"Error creating flat selection: {exc}"}), 500
 
     return jsonify({"code": 201, "data": selection.json()}), 201
+
+
+# Bulk creates selections.
+@app.route("/flat-selection/bulk", methods=["POST"])
+def create_selection_bulk():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"code": 400, "message": "Request body must be a JSON object."}), 400
+
+    records = data.get("records")
+    if not isinstance(records, list) or not records:
+        return jsonify({"code": 400, "message": "records is required and must be a non-empty array."}), 400
+
+    errors = []
+    cleaned_records = []
+    seen_application_ids = set()
+    for index, record in enumerate(records):
+        cleaned, record_errors = validate_selection_payload(record, f"records[{index}].")
+        if record_errors:
+            errors.extend(record_errors)
+            continue
+
+        application_id = cleaned["application_id"]
+        if application_id in seen_application_ids:
+            errors.append(f"Duplicate application_id found in request records: {application_id}.")
+            continue
+
+        seen_application_ids.add(application_id)
+        cleaned_records.append(cleaned)
+
+    if errors:
+        return jsonify({"code": 400, "message": "Validation error.", "errors": errors}), 400
+
+    existing_rows = db.session.scalars(
+        db.select(FlatSelection).where(FlatSelection.application_id.in_(seen_application_ids))
+    ).all()
+    existing_by_application_id = {
+        row.application_id: row
+        for row in existing_rows
+    }
+
+    result_by_application_id = {}
+    rows_to_create = []
+    created_pairs = []
+
+    for record in cleaned_records:
+        application_id = record["application_id"]
+        existing = existing_by_application_id.get(application_id)
+        if existing:
+            result_by_application_id[application_id] = {
+                "application_id": application_id,
+                "project_id": record["project_id"],
+                "queue_number": record["queue_number"],
+                "created": False,
+                "existing": True,
+                "selection_id": existing.selection_id,
+                "message": f"Application {application_id} already has a flat-selection record.",
+            }
+            continue
+
+        row = FlatSelection(
+            application_id=application_id,
+            applicant_nric=record["applicant_nric"],
+            co_applicant_nric=record["co_applicant_nric"],
+            project_id=record["project_id"],
+            queue_number=record["queue_number"],
+            status="balloted",
+        )
+        rows_to_create.append(row)
+        created_pairs.append((record, row))
+        db.session.add(row)
+
+    try:
+        if rows_to_create:
+            db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"code": 500, "message": f"Error creating flat selections in bulk: {exc}"}), 500
+
+    for record, row in created_pairs:
+        application_id = record["application_id"]
+        result_by_application_id[application_id] = {
+            "application_id": application_id,
+            "project_id": record["project_id"],
+            "queue_number": record["queue_number"],
+            "created": True,
+            "existing": False,
+            "selection_id": row.selection_id,
+            "message": "Flat selection entry created.",
+        }
+
+    ordered_results = [
+        result_by_application_id[record["application_id"]]
+        for record in cleaned_records
+        if record["application_id"] in result_by_application_id
+    ]
+
+    created_count = sum(1 for row in ordered_results if row["created"])
+    existing_count = sum(1 for row in ordered_results if row["existing"])
+    status_code = 201 if created_count > 0 else 200
+
+    return jsonify({
+        "code": status_code,
+        "data": {
+            "town_name": data.get("town_name"),
+            "flat_type": data.get("flat_type"),
+            "total": len(cleaned_records),
+            "created_count": created_count,
+            "existing_count": existing_count,
+            "results": ordered_results,
+        },
+    }), status_code
 
 
 # Handles reserve selection.
