@@ -90,7 +90,6 @@ async function confirmPayment() {
       application: submission.application,
       income_document: submission.incomeDocument,
       hfe_document: submission.hfeDocument,
-      payment_amount: APPLICATION_FEE,
     })
 
     const { gateway_url, payload, hmac, api_key_id, merchant_txn_ref } = result.payment

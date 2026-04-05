@@ -9,7 +9,6 @@ from flask_cors import CORS
 from flasgger import Swagger
 
 DATA_PATH = Path(os.environ.get("SINGPASS_DATA_PATH", Path(__file__).with_name("v3.json")))
-DEMO_DATA_PATH = Path(os.environ.get("SINGPASS_DEMO_DATA_PATH", Path(__file__).with_name("demo_personas.json")))
 
 app = Flask(__name__)
 CORS(app)
@@ -31,14 +30,6 @@ def load_personas():
     personas = payload.get("personas", {})
     if not isinstance(personas, dict):
         personas = {}
-
-    # Optional supplemental personas for local demos.
-    if DEMO_DATA_PATH.exists():
-        with DEMO_DATA_PATH.open("r", encoding="utf-8") as handle:
-            demo_payload = json.load(handle)
-        demo_personas = demo_payload.get("personas", {})
-        if isinstance(demo_personas, dict):
-            personas.update(demo_personas)
 
     return personas
 

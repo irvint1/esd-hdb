@@ -3,7 +3,7 @@ USE hfe_applications;
 
 CREATE TABLE IF NOT EXISTS hfe_application (
     hfe_application_id INT AUTO_INCREMENT PRIMARY KEY,
-    main_applicant_nric VARCHAR(20) NOT NULL UNIQUE,
+    main_applicant_nric VARCHAR(20) NOT NULL,
     main_applicant_name VARCHAR(255) NOT NULL,
     co_applicant_nric VARCHAR(20) DEFAULT NULL,
     co_applicant_name VARCHAR(255) DEFAULT NULL,

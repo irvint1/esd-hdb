@@ -108,7 +108,7 @@ class HfeApplication(db.Model):
     __tablename__ = "hfe_application"
 
     hfe_application_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    main_applicant_nric = db.Column(db.String(20), nullable=False, unique=True)
+    main_applicant_nric = db.Column(db.String(20), nullable=False)
     main_applicant_name = db.Column(db.String(255), nullable=False)
     co_applicant_nric = db.Column(db.String(20), nullable=True)
     co_applicant_name = db.Column(db.String(255), nullable=True)
@@ -180,7 +180,7 @@ def upsert_scenario_hfe_records():
 @app.route("/hfe-applications", methods=["GET"])
 def get_hfe_applications():
     """
-    Retrieve HFE application results
+    Retrieve HFE application 
     ---
     tags:
       - HFE Applications

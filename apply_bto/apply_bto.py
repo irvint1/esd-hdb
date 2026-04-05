@@ -20,7 +20,6 @@ NETS_PAYMENT_SERVICE_URL = os.environ.get("NETS_PAYMENT_SERVICE_URL", "http://lo
 APPLICATION_SERVICE_URL = os.environ.get("APPLICATION_SERVICE_URL", "http://localhost:5004")
 CHECK_ELIGIBILITY_SERVICE_URL = os.environ.get("CHECK_ELIGIBILITY_SERVICE_URL", "http://localhost:5008")
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "20"))
-DEFAULT_APPLICATION_FEE = float(os.environ.get("APPLICATION_FEE", "10"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 STAGE_PAYMENT_PENDING = "payment_pending"
@@ -30,6 +29,8 @@ STAGE_APPLICATION_CREATED = "application_created"
 STAGE_ELIGIBILITY_CHECKED = "eligibility_checked"
 STAGE_COMPLETED = "completed"
 STAGE_ERROR = "error"
+
+PAYMENT_AMOUNT = 10
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -56,6 +57,62 @@ swagger = Swagger(app)
 
 # In-memory workflow storage keyed by merchant_txn_ref.
 workflows = {}
+
+
+def load_default_application_fee():
+    raw_value = os.environ.get("APPLICATION_FEE", "10")
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid APPLICATION_FEE '%s'. Falling back to 10.0.",
+            raw_value,
+        )
+        return 10.0
+
+    if value <= 0:
+        logger.warning(
+            "Non-positive APPLICATION_FEE '%s'. Falling back to 10.0.",
+            raw_value,
+        )
+        return 10.0
+
+    return value
+
+
+DEFAULT_APPLICATION_FEE = load_default_application_fee()
+
+NOTIFICATION_URL      = os.environ.get('NOTIFICATION_URL',      'http://localhost:5013')
+RABBITMQ_HOST    = os.environ.get('RABBITMQ_HOST',    'localhost')
+RABBITMQ_PORT    = int(os.environ.get('RABBITMQ_PORT', 5672))
+EXCHANGE_NAME    = 'bto_notifications'
+
+def publish_event(routing_key: str, payload: dict):
+    """Publish a notification event; falls back to HTTP if RabbitMQ unavailable."""
+    try:
+        import pika
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=RABBITMQ_HOST, port=RABBITMQ_PORT)
+        )
+        channel = connection.channel()
+        channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type='topic', durable=True)
+        channel.basic_publish(
+            exchange=EXCHANGE_NAME,
+            routing_key=routing_key,
+            body=json.dumps(payload),
+        )
+        connection.close()
+        print(f'[AMQP] Published: {routing_key}')
+    except Exception as e:
+        print(f'[AMQP] Failed ({e}); falling back to HTTP notification.')
+        try:
+            requests.post(
+                f'{NOTIFICATION_URL}/notify',
+                json={**payload, 'event_type': routing_key},
+                timeout=5
+            )
+        except Exception as http_e:
+            print(f'[HTTP NOTIFY] Also failed: {http_e}')
 
 
 # ---------------------------------------------------------------------------
@@ -97,18 +154,6 @@ def parse_int(value):
         return value
     return None
 
-
-#  Handles parse payment amount for this service.
-def parse_payment_amount(raw_value):
-    if raw_value in (None, ""):
-        return DEFAULT_APPLICATION_FEE
-
-    try:
-        value = float(raw_value)
-    except (TypeError, ValueError):
-        return None
-
-    return value if value > 0 else None
 
 
 #  Handles extract error message for this service.
@@ -660,15 +705,12 @@ def initiate_apply_bto():
     if file_errors:
         return error_response("Validation error.", 400, file_errors)
 
-    payment_amount = parse_payment_amount(request.form.get("payment_amount"))
-    if payment_amount is None:
-        return error_response("Validation error.", 400, ["'payment_amount' must be a positive number."])
 
     applicant_id = normalise_nric(application.get("main_applicant_nric"))
     description = request.form.get("payment_description") or f"BTO Application Fee - {applicant_id}"
 
     try:
-        payment_response = initiate_payment(applicant_id, payment_amount, description)
+        payment_response = initiate_payment(applicant_id, PAYMENT_AMOUNT, description)
     except requests.RequestException as exc:
         return jsonify({"error": f"Unable to initiate payment via NETS Payment Service: {exc}"}), 502
 
@@ -685,7 +727,6 @@ def initiate_apply_bto():
         "merchant_txn_ref": merchant_txn_ref,
         "stage": STAGE_PAYMENT_PENDING,
         "payment_status": "pending",
-        "payment_amount": payment_amount,
         "application": application,
         "income_document": serialise_file(income_document),
         "hfe_document": serialise_file(hfe_document),
@@ -703,7 +744,7 @@ def initiate_apply_bto():
         "Apply BTO workflow created",
         merchant_txn_ref=merchant_txn_ref,
         stage=STAGE_PAYMENT_PENDING,
-        payment_amount=payment_amount,
+        payment_amount=PAYMENT_AMOUNT,
         main_applicant_nric=application.get("main_applicant_nric"),
     )
 

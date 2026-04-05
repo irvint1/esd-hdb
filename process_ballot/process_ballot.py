@@ -1,5 +1,3 @@
-"""Process Ballot orchestration service."""
-
 from collections import defaultdict
 from datetime import datetime
 import json
@@ -17,10 +15,7 @@ BALLOT_AUDIT_SERVICE_URL = os.environ.get("BALLOT_AUDIT_SERVICE_URL", "http://lo
 BALLOT_SERVICE_URL = os.environ.get("BALLOT_SERVICE_URL", "http://localhost:5005")
 APPLICATION_SERVICE_URL = os.environ.get("APPLICATION_SERVICE_URL", "http://localhost:5004")
 PROJECT_SERVICE_URL = os.environ.get("PROJECT_SERVICE_URL", "http://localhost:5012")
-VALIDATE_ELIGIBILITY_SERVICE_URL = os.environ.get(
-    "VALIDATE_ELIGIBILITY_SERVICE_URL",
-    "http://localhost:5013",
-)
+VALIDATE_ELIGIBILITY_SERVICE_URL = os.environ.get("VALIDATE_ELIGIBILITY_SERVICE_URL","http://localhost:5013")
 FLAT_SELECTION_SERVICE_URL = os.environ.get("FLAT_SELECTION_SERVICE_URL", "http://localhost:5002")
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "20"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()

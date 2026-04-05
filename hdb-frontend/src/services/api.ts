@@ -188,7 +188,6 @@ export interface ApplyBtoInitiateRequest {
   application: ApplyBtoApplicationPayload
   income_document: File
   hfe_document: File
-  payment_amount?: number
 }
 
 export interface ApplyBtoPaymentRequestPayload {
@@ -293,10 +292,6 @@ export async function initiateApplyBtoSubmission(
   formData.append('application', JSON.stringify(payload.application))
   formData.append('income_document', payload.income_document)
   formData.append('hfe_document', payload.hfe_document)
-
-  if (typeof payload.payment_amount === 'number') {
-    formData.append('payment_amount', String(payload.payment_amount))
-  }
 
   const response = await applyBtoApi.post<ApplyBtoCompletionResult & { payment: ApplyBtoPaymentRequestPayload }>(
     '/apply-bto/initiate',

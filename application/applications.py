@@ -61,8 +61,8 @@ class Application(db.Model):
     project_id = db.Column(db.Integer, nullable=False)
     flat_type = db.Column(db.String(50), nullable=False)
     main_applicant_nric = db.Column(db.String(20), nullable=False)
-    income_document_id = db.Column(db.Integer, nullable=True)
-    hfe_document_id = db.Column(db.Integer, nullable=True)
+    income_document_id = db.Column(db.BigInteger, nullable=True)
+    hfe_document_id = db.Column(db.BigInteger, nullable=True)
     application_status = db.Column(
         db.Enum(*ALLOWED_APPLICATION_STATUSES, name="application_status_enum"),
         nullable=False,
