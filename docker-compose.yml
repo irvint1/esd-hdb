@@ -243,6 +243,28 @@ services:
       HDB_PORTAL_URL: ${HDB_PORTAL_URL:-http://localhost:5173}
     restart: always
 
+  # Notification Service — RabbitMQ wrapper API
+  notification-api:
+    build:
+      context: ./cloudamqp
+      dockerfile: Dockerfile
+    container_name: notification_api
+    ports:
+      - "5015:5000"
+    env_file:
+      - ./cloudamqp/.env
+    restart: always
+
+  # Notification Service — RabbitMQ consumer + Twilio SMS
+  notification-consumer:
+    build:
+      context: ./cloudamqp
+      dockerfile: Dockerfile.consumer
+    container_name: notification_consumer
+    env_file:
+      - ./cloudamqp/.env
+    restart: always
+
   ballot-audit-db:
     image: mysql:8.0
     container_name: ballot_audit_db
@@ -386,8 +408,3 @@ volumes:
   flat_db_data:
   flat_selection_db_data:
   project_db_data:
-
-networks:
-  default:
-    name: esd-net
-    external: true
