@@ -30,7 +30,7 @@ STAGE_ELIGIBILITY_CHECKED = "eligibility_checked"
 STAGE_COMPLETED = "completed"
 STAGE_ERROR = "error"
 
-PAYMENT_AMOUNT = 10
+APPLICATION_FEE = 10
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -59,31 +59,8 @@ swagger = Swagger(app)
 workflows = {}
 
 
-def load_default_application_fee():
-    raw_value = os.environ.get("APPLICATION_FEE", "10")
-    try:
-        value = float(raw_value)
-    except (TypeError, ValueError):
-        logger.warning(
-            "Invalid APPLICATION_FEE '%s'. Falling back to 10.0.",
-            raw_value,
-        )
-        return 10.0
-
-    if value <= 0:
-        logger.warning(
-            "Non-positive APPLICATION_FEE '%s'. Falling back to 10.0.",
-            raw_value,
-        )
-        return 10.0
-
-    return value
-
-
-DEFAULT_APPLICATION_FEE = load_default_application_fee()
-
 NOTIFICATION_SERVICE_URL = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:5000")
-NOTIFICATION_QUEUE_NAME = os.environ.get("NOTIFICATION_QUEUE_NAME", "hdb_notification_queue")
+NOTIFICATION_QUEUE_NAME = "hdb_notification_queue"
 
 def publish_event(routing_key: str, payload: dict):
     """Publish a notification event to the notification API."""
@@ -188,11 +165,30 @@ def notify_apply_outcome(workflow):
     application_id = workflow.get("application_id")
 
     summary = eligibility_result.get("summary")
-    if not isinstance(summary, str) or not summary.strip():
+    if isinstance(summary, str):
+        summary = summary.strip()
+
+    ineligibility_reasons = normalise_ineligibility_reasons(
+        eligibility_result.get("ineligibility_reasons")
+    )
+    formatted_ineligibility_reasons = (
+        "\n".join(f"{index + 1}. {reason}" for index, reason in enumerate(ineligibility_reasons))
+        if ineligibility_reasons
+        else None
+    )
+
+    if not summary:
         summary = (
             "Your BTO application is eligible."
             if is_eligible
             else "Your BTO application is not eligible."
+        )
+
+    if not is_eligible and formatted_ineligibility_reasons:
+        summary = (
+            "Your BTO application is not eligible.\n"
+            "Reason(s):\n"
+            f"{formatted_ineligibility_reasons}"
         )
 
     payload = {
@@ -202,11 +198,11 @@ def notify_apply_outcome(workflow):
         "applicantId": applicant_nric,
         "email": email,
         "mobile": mobile,
+        "reasons": ineligibility_reasons,
         "message": summary,
     }
 
     return publish_event(routing_key, payload)
-
 
 
 #  Handles extract error message for this service.
@@ -731,7 +727,7 @@ def finalise_workflow(workflow):
             application_status=updated_application.get("application_status"),
         )
 
-    if not workflow.get("notification_sent"):
+    if workflow["stage"] == STAGE_COMPLETED and not workflow.get("notification_sent"):
         workflow["notification_sent"] = notify_apply_outcome(workflow)
         workflow["updated_at"] = now_iso()
 
@@ -792,9 +788,6 @@ def initiate_apply_bto():
               hfe_document:
                 type: string
                 format: binary
-              payment_amount:
-                type: number
-                description: Optional override for the application fee.
     responses:
       200:
         description: Hosted NETS payment request created successfully.
@@ -834,7 +827,7 @@ def initiate_apply_bto():
     description = request.form.get("payment_description") or f"BTO Application Fee - {applicant_id}"
 
     try:
-        payment_response = initiate_payment(applicant_id, PAYMENT_AMOUNT, description)
+        payment_response = initiate_payment(applicant_id, APPLICATION_FEE, description)
     except requests.RequestException as exc:
         return jsonify({"error": f"Unable to initiate payment via NETS Payment Service: {exc}"}), 502
 
@@ -869,7 +862,7 @@ def initiate_apply_bto():
         "Apply BTO workflow created",
         merchant_txn_ref=merchant_txn_ref,
         stage=STAGE_PAYMENT_PENDING,
-        payment_amount=PAYMENT_AMOUNT,
+        payment_amount=APPLICATION_FEE,
         main_applicant_nric=application.get("main_applicant_nric"),
     )
 

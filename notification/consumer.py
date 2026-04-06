@@ -107,15 +107,17 @@ def callback(ch, method, properties, body):
             f"mobile={'present' if mobile else 'missing'}"
         )
 
+        custom_subject = message.get("subject")
         if event_type == "FlatConfirmed":
-            subject = "Flat Selection Confirmed"
+            subject = custom_subject or "Flat Selection Confirmed"
         elif event_type == "PaymentFailed":
-            subject = "Payment Failed - Please Retry"
+            subject = custom_subject or "Payment Failed - Please Retry"
+        elif event_type == "FlatBookingQueueAssigned":
+            subject = custom_subject or "Flat Selection Queue Number and Appointment Time"
         elif event_type in {"BTOEligibilityPassed", "BTOEligibilityFailed"}:
-            # Application scenario payload already provides final content.
-            subject = message.get("subject", "BTO Notification")
+            subject = custom_subject or "BTO Notification"
         else:
-            subject = "BTO Notification"
+            subject = custom_subject or "BTO Notification"
 
         # This is so that it does not overwhelm the external API.
         if should_skip_external_delivery(email, mobile):
@@ -145,7 +147,7 @@ def main():
     channel = connection.channel()
 
     exchange = "bto"
-    queue_name = os.getenv("NOTIFICATION_QUEUE_NAME", "hdb_notification_queue")
+    queue_name = "hdb_notification_queue"
 
     channel.exchange_declare(exchange=exchange, exchange_type="topic", durable=True)
     channel.queue_declare(queue=queue_name, durable=True)

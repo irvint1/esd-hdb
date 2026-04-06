@@ -59,9 +59,6 @@ let pendingPollHandle: number | null = null
 
 const applicationStatus = computed(() => wrapperResult.value?.application_status ?? null)
 const ineligibilityReasons = computed(() => wrapperResult.value?.ineligibility_reasons ?? [])
-const formattedIneligibilityReasons = computed(
-  () => wrapperResult.value?.formatted_ineligibility_reasons ?? '',
-)
 const workflowStage = computed(() => wrapperResult.value?.stage ?? 'unknown')
 const paymentStatus = computed(() => wrapperResult.value?.payment_status ?? 'unknown')
 const isEligible = computed(() => wrapperResult.value?.eligible)
@@ -385,9 +382,6 @@ onBeforeUnmount(() => {
 
         <div v-if="ineligibilityReasons.length > 0" class="result-reasons">
           <p class="result-reasons__title">Ineligibility Reasons</p>
-          <p v-if="formattedIneligibilityReasons" class="result-reasons__formatted">
-            {{ formattedIneligibilityReasons }}
-          </p>
           <ul>
             <li v-for="reason in ineligibilityReasons" :key="reason">{{ reason }}</li>
           </ul>
@@ -704,13 +698,6 @@ onBeforeUnmount(() => {
   color: rgba(29, 29, 31, 0.76);
 }
 
-
-.result-reasons__formatted {
-  margin: 0 0 12px;
-  color: var(--color-text-muted);
-  text-align: left;
-  white-space: pre-line;
-}
 .result-reasons li + li {
   margin-top: 8px;
 }

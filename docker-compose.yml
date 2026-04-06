@@ -220,7 +220,6 @@ services:
       APPLICATION_SERVICE_URL: http://application-service:5004
       CHECK_ELIGIBILITY_SERVICE_URL: http://check-eligibility-service:5008
       NOTIFICATION_SERVICE_URL: http://notification-api:5000
-      NOTIFICATION_QUEUE_NAME: hdb_notification_queue_irvin
       APPLICATION_FEE: 10
     depends_on:
       - notification-api
@@ -267,8 +266,6 @@ services:
     container_name: notification_consumer
     env_file:
       - ./notification/.env
-    environment:
-      NOTIFICATION_QUEUE_NAME: hdb_notification_queue_irvin
     restart: always
 
   ballot-audit-db:
@@ -370,12 +367,14 @@ services:
       PROJECT_SERVICE_URL: ${PROJECT_SERVICE_URL:-https://personal-iu6aefgj.outsystemscloud.com/ProjectsMicroservice/rest/ProjectsAPI}
       VALIDATE_ELIGIBILITY_SERVICE_URL: http://validate-eligibility-service:5013
       FLAT_SELECTION_SERVICE_URL: http://flat-selection-service:5002
+      NOTIFICATION_SERVICE_URL: http://notification-api:5000
       REQUEST_TIMEOUT_SECONDS: 20
     depends_on:
       - application-service
       - validate-eligibility-service
       - ballot-service
       - flat-selection-service
+      - notification-api
     restart: always
 
 volumes:

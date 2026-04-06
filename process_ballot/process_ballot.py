@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 import os
@@ -20,9 +20,20 @@ PROJECT_SERVICE_URL = os.environ.get(
 )
 VALIDATE_ELIGIBILITY_SERVICE_URL = os.environ.get("VALIDATE_ELIGIBILITY_SERVICE_URL", "http://localhost:5013")
 FLAT_SELECTION_SERVICE_URL = os.environ.get("FLAT_SELECTION_SERVICE_URL", "http://localhost:5002")
+NOTIFICATION_SERVICE_URL = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:5000")
+NOTIFICATION_QUEUE_NAME = "hdb_notification_queue"
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "20"))
 VALIDATION_BATCH_SIZE = max(1, int(os.environ.get("VALIDATION_BATCH_SIZE", "25")))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+ADMIN_ALERT_EMAIL = os.environ.get("ADMIN_ALERT_EMAIL")
+ADMIN_ALERT_MOBILE = os.environ.get("ADMIN_ALERT_MOBILE")
+
+QUEUE_SLOT_CAPACITY = max(1, int(os.environ.get("QUEUE_SLOT_CAPACITY", "10")))
+QUEUE_SLOT_DURATION_MINUTES = max(1, int(os.environ.get("QUEUE_SLOT_DURATION_MINUTES", "30")))
+QUEUE_SLOT_START_HOUR = int(os.environ.get("QUEUE_SLOT_START_HOUR", "9"))
+QUEUE_SLOT_END_HOUR = int(os.environ.get("QUEUE_SLOT_END_HOUR", "17"))
+QUEUE_SLOT_LUNCH_START_HOUR = int(os.environ.get("QUEUE_SLOT_LUNCH_START_HOUR", "12"))
+QUEUE_SLOT_LUNCH_END_HOUR = int(os.environ.get("QUEUE_SLOT_LUNCH_END_HOUR", "13"))
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -48,11 +59,12 @@ class BallotOrchestrationError(Exception):
     """Raised when an upstream call or orchestration step fails."""
 
     # Initializes the required data.
-    def __init__(self, message, status_code=502, details=None):
+    def __init__(self, message, status_code=502, details=None, step=None):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
         self.details = details or []
+        self.step = step
 
 
 # Handles now iso.
@@ -100,6 +112,7 @@ def request_json(method, url, *, params=None, json_body=None, allowed_statuses=(
         raise BallotOrchestrationError(
             f"Unable to reach upstream service at {url}: {exc}",
             status_code=502,
+            step=f"{method} {url}",
         ) from exc
 
     log_action(
@@ -127,7 +140,7 @@ def request_json(method, url, *, params=None, json_body=None, allowed_statuses=(
             status_code=response.status_code,
             allowed_statuses=list(allowed_statuses),
         )
-        raise BallotOrchestrationError(message, status_code=502)
+        raise BallotOrchestrationError(message, status_code=502, step=f"{method} {url}")
 
     try:
         payload = response.json()
@@ -138,6 +151,33 @@ def request_json(method, url, *, params=None, json_body=None, allowed_statuses=(
         payload = {}
 
     return response.status_code, payload
+
+
+def publish_event(routing_key: str, payload: dict):
+    """Publish a notification event to the notification API."""
+    try:
+        response = requests.post(
+            f"{NOTIFICATION_SERVICE_URL}/publish",
+            json={
+                "exchange": "bto",
+                "exchange_type": "topic",
+                "routing_key": routing_key,
+                "queue_name": NOTIFICATION_QUEUE_NAME,
+                "payload": payload,
+            },
+            timeout=5,
+        )
+        response.raise_for_status()
+        log_action("Published notification event", routing_key=routing_key)
+        return True
+    except requests.RequestException as exc:
+        log_action(
+            "Notification publish failed",
+            level=logging.WARNING,
+            routing_key=routing_key,
+            error=str(exc),
+        )
+        return False
 
 
 # Checks whether positive int.
@@ -151,6 +191,291 @@ def normalise_nric(value):
         return None
     cleaned = value.strip().upper()
     return cleaned if cleaned else None
+
+
+def get_main_applicant_contact(application):
+    members = application.get("members") if isinstance(application, dict) else None
+    if not isinstance(members, list):
+        return None, None
+
+    main_member = next(
+        (
+            member
+            for member in members
+            if isinstance(member, dict) and str(member.get("member_role", "")).upper() == "MAIN_APPLICANT"
+        ),
+        None,
+    )
+    if not isinstance(main_member, dict):
+        return None, None
+
+    mobile = main_member.get("contact_number")
+    email = main_member.get("email")
+
+    normalized_mobile = mobile.strip() if isinstance(mobile, str) and mobile.strip() else None
+    normalized_email = email.strip() if isinstance(email, str) and email.strip() else None
+    return normalized_mobile, normalized_email
+
+
+def flat_type_sort_key(flat_type):
+    """Sort flat types from smallest to largest based on their leading room count."""
+    if not isinstance(flat_type, str):
+        return (10**9, "")
+
+    cleaned = flat_type.strip().lower()
+    number_buffer = ""
+    for character in cleaned:
+        if character.isdigit():
+            number_buffer += character
+            continue
+        if number_buffer:
+            break
+
+    if number_buffer:
+        return (int(number_buffer), cleaned)
+
+    return (10**9, cleaned)
+
+
+def build_queue_slots():
+    """Build available 30-minute booking windows, excluding lunch break."""
+    if QUEUE_SLOT_START_HOUR >= QUEUE_SLOT_END_HOUR:
+        raise BallotOrchestrationError(
+            "Invalid queue slot configuration: start hour must be before end hour.",
+            step="build_queue_slots",
+        )
+
+    slots = []
+    current_minutes = QUEUE_SLOT_START_HOUR * 60
+    end_minutes = QUEUE_SLOT_END_HOUR * 60
+    lunch_start_minutes = QUEUE_SLOT_LUNCH_START_HOUR * 60
+    lunch_end_minutes = QUEUE_SLOT_LUNCH_END_HOUR * 60
+
+    while current_minutes + QUEUE_SLOT_DURATION_MINUTES <= end_minutes:
+        slot_start = current_minutes
+        slot_end = current_minutes + QUEUE_SLOT_DURATION_MINUTES
+
+        overlaps_lunch = slot_start < lunch_end_minutes and slot_end > lunch_start_minutes
+        if not overlaps_lunch:
+            slots.append((slot_start, slot_end))
+
+        current_minutes += QUEUE_SLOT_DURATION_MINUTES
+
+    if not slots:
+        raise BallotOrchestrationError(
+            "Invalid queue slot configuration: no valid booking slots generated.",
+            status_code=500,
+            step="build_queue_slots",
+        )
+
+    return slots
+
+
+QUEUE_SLOTS = build_queue_slots()
+
+
+def format_minutes_as_hhmm(total_minutes):
+    hours = total_minutes // 60
+    minutes = total_minutes % 60
+    return f"{hours:02d}:{minutes:02d}"
+
+
+def next_monday_after(input_date):
+    """Return the Monday strictly after the provided date."""
+    days_ahead = (7 - input_date.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    return input_date + timedelta(days=days_ahead)
+
+
+def add_business_days(start_date, business_days_to_add):
+    """Add business days (Mon-Fri) to a date, skipping weekends."""
+    current_date = start_date
+    remaining = max(0, int(business_days_to_add))
+
+    while remaining > 0:
+        current_date += timedelta(days=1)
+        if current_date.weekday() < 5:
+            remaining -= 1
+
+    return current_date
+
+
+def compute_booking_slot(queue_number, first_booking_date):
+    if not is_positive_int(queue_number):
+        return None
+
+    if not isinstance(first_booking_date, datetime):
+        raise BallotOrchestrationError(
+            "Booking slot computation requires a valid first booking date.",
+            status_code=500,
+            step="compute_booking_slot",
+        )
+
+    slot_index = (queue_number - 1) // QUEUE_SLOT_CAPACITY
+    day_number = (slot_index // len(QUEUE_SLOTS)) + 1
+    day_slot_index = slot_index % len(QUEUE_SLOTS)
+    slot_start, slot_end = QUEUE_SLOTS[day_slot_index]
+    booking_date = add_business_days(first_booking_date.date(), day_number - 1)
+
+    return {
+        "day_number": day_number,
+        "date": booking_date.isoformat(),
+        "start_time": format_minutes_as_hhmm(slot_start),
+        "end_time": format_minutes_as_hhmm(slot_end),
+        "capacity": QUEUE_SLOT_CAPACITY,
+        "duration_minutes": QUEUE_SLOT_DURATION_MINUTES,
+        "label": (
+            f"Day {day_number} ({booking_date.isoformat()}), "
+            f"{format_minutes_as_hhmm(slot_start)}-{format_minutes_as_hhmm(slot_end)}"
+        ),
+    }
+
+
+def notify_queue_assignment(*, project_name, town_name, flat_type, application_id, applicant_nric, email, mobile, queue_number, booking_slot):
+    if not email and not mobile:
+        return True
+
+    slot_label = booking_slot["label"] if isinstance(booking_slot, dict) else "TBD"
+    payload = {
+        "eventType": "FlatBookingQueueAssigned",
+        "subject": "Flat Selection Queue Number and Appointment Time",
+        "applicationId": application_id,
+        "applicantId": applicant_nric,
+        "email": email,
+        "mobile": mobile,
+        "queueNumber": queue_number,
+        "bookingSlot": booking_slot,
+        "projectName": project_name,
+        "townName": town_name,
+        "flatType": flat_type,
+        "message": (
+            f"Your queue number for {project_name} ({flat_type}) is {queue_number}. "
+            f"Please report for flat booking at {slot_label}."
+        ),
+    }
+    return publish_event("application.notify", payload)
+
+
+def notify_admin_failure(*, exercise_id, audit_id, run_id, trigger_source, error_message, details=None, step=None):
+    if not ADMIN_ALERT_EMAIL and not ADMIN_ALERT_MOBILE:
+        log_action(
+            "Admin alert skipped because admin contact details are not configured",
+            level=logging.WARNING,
+            exercise_id=exercise_id,
+            audit_id=audit_id,
+            run_id=run_id,
+        )
+        return False
+
+    detail_lines = []
+    if isinstance(details, list):
+        detail_lines = [str(item) for item in details if str(item).strip()]
+
+    message_lines = [
+        "Process Ballot encountered a service failure.",
+        f"Run ID: {run_id}",
+        f"Exercise ID: {exercise_id}",
+        f"Audit ID: {audit_id}",
+        f"Trigger Source: {trigger_source}",
+        f"Failed Step: {step or 'unexpected_error'}",
+        f"Error: {error_message}",
+    ]
+    if detail_lines:
+        message_lines.append("Details:")
+        message_lines.extend(detail_lines)
+
+    payload = {
+        "eventType": "AdminServiceFailure",
+        "subject": "Process Ballot Service Failure",
+        "applicationId": None,
+        "applicantId": None,
+        "email": ADMIN_ALERT_EMAIL,
+        "mobile": ADMIN_ALERT_MOBILE,
+        "message": "\n".join(message_lines),
+    }
+    return publish_event("application.notify", payload)
+
+
+def normalize_reason_list(reasons):
+    if not isinstance(reasons, list):
+        return []
+    normalized = []
+    seen = set()
+
+    for item in reasons:
+        if not isinstance(item, str):
+            continue
+
+        for raw_line in item.splitlines():
+            cleaned = raw_line.strip()
+            if not cleaned:
+                continue
+
+            lowered = cleaned.lower()
+            if lowered == "ineligibility reasons":
+                continue
+
+            # Remove common bullet prefixes.
+            if cleaned.startswith("- "):
+                cleaned = cleaned[2:].strip()
+
+            # Remove common numbering prefixes such as "1. " or "1) ".
+            dot_parts = cleaned.split(". ", 1)
+            if len(dot_parts) == 2 and dot_parts[0].isdigit():
+                cleaned = dot_parts[1].strip()
+            else:
+                bracket_parts = cleaned.split(") ", 1)
+                if len(bracket_parts) == 2 and bracket_parts[0].isdigit():
+                    cleaned = bracket_parts[1].strip()
+
+            if not cleaned:
+                continue
+
+            dedupe_key = cleaned.lower()
+            if dedupe_key in seen:
+                continue
+
+            seen.add(dedupe_key)
+            normalized.append(cleaned)
+
+    return normalized
+
+
+def format_ineligibility_reasons(reasons):
+    normalized = normalize_reason_list(reasons)
+    if not normalized:
+        return "No detailed reason was provided during eligibility re-validation."
+    return "\n".join(f"{index}. {reason}" for index, reason in enumerate(normalized, start=1))
+
+
+def notify_validation_failure(*, application, ineligible_row, project_name):
+    if not isinstance(application, dict) or not isinstance(ineligible_row, dict):
+        return False
+
+    email, mobile = get_main_applicant_contact(application)
+    if not email and not mobile:
+        return True
+
+    reason_text = format_ineligibility_reasons(ineligible_row.get("reasons"))
+    payload = {
+        "eventType": "BTOEligibilityFailed",
+        "subject": "BTO Eligibility Re-Validation Failed",
+        "applicationId": ineligible_row.get("application_id"),
+        "applicantId": ineligible_row.get("main_applicant_nric") or application.get("main_applicant_nric"),
+        "email": email,
+        "mobile": mobile,
+        "projectName": project_name,
+        "validationStage": "post-application ballot validation",
+        "reasons": normalize_reason_list(ineligible_row.get("reasons")),
+        "message": (
+            "Your BTO application did not pass the latest eligibility re-validation and cannot proceed to balloting.\n"
+            f"Project: {project_name}\n"
+            "Reason(s):\n"
+            f"{reason_text}"
+        ),
+    }
+    return publish_event("application.notify", payload)
 
 
 # Gets co applicant nric.
@@ -216,7 +541,11 @@ def fetch_projects_for_exercise(exercise_id):
         # Defensive support for alternate envelope casing used by some gateways.
         rows = payload.get("Data")
     if not isinstance(rows, list):
-        raise BallotOrchestrationError("Project service returned an invalid project payload.", 502)
+        raise BallotOrchestrationError(
+            "Project service returned an invalid project payload.",
+            502,
+            step="fetch_projects_for_exercise",
+        )
     log_action("Fetched projects for exercise", exercise_id=exercise_id, project_count=len(rows))
     return rows
 
@@ -233,7 +562,11 @@ def fetch_ballot_candidate_applications(exercise_id):
     )
     applications = payload.get("applications")
     if not isinstance(applications, list):
-        raise BallotOrchestrationError("Applications service returned an invalid payload.", 502)
+        raise BallotOrchestrationError(
+            "Applications service returned an invalid payload.",
+            502,
+            step="fetch_ballot_candidate_applications",
+        )
 
     log_action(
         "Fetched ballot candidate applications",
@@ -313,6 +646,7 @@ def fetch_ballot_chances(applications, exercise_projects):
         raise BallotOrchestrationError(
             "Flat selection chance endpoint returned an invalid grouped payload.",
             502,
+            step="fetch_ballot_chances",
         )
 
     chance_map = {}
@@ -453,6 +787,7 @@ def validate_submitted_applications(applications, exercise_projects):
             raise BallotOrchestrationError(
                 "Validate-eligibility bulk endpoint returned an invalid grouped payload.",
                 502,
+                step="validate_submitted_applications",
             )
 
         top_level_warnings = payload.get("warnings")
@@ -488,6 +823,7 @@ def validate_submitted_applications(applications, exercise_projects):
                 raise BallotOrchestrationError(
                     "Validate-eligibility bulk endpoint returned an invalid group results payload.",
                     502,
+                    step="validate_submitted_applications",
                 )
 
             results.extend(item for item in group_results if isinstance(item, dict))
@@ -498,17 +834,32 @@ def validate_submitted_applications(applications, exercise_projects):
                 "Validate-eligibility bulk endpoint did not return all requested groups.",
                 502,
                 details=[f"Missing validation group for town '{town_name}' flat_type '{flat_type}'." for town_name, flat_type in missing_groups],
+                step="validate_submitted_applications",
             )
+
 
     for result in results:
         if result.get("eligible"):
             continue
 
+        normalized_reasons = normalize_reason_list(result.get("ineligibility_reasons", []))
+        # Always ensure a reason is present
+        if not normalized_reasons:
+            normalized_reasons = ["No eligibility or ballot failure reason was provided by the system."]
+            log_action(
+                "Eligibility/ballot failure with no reason provided",
+                level=logging.WARNING,
+                application_id=result.get("application_id"),
+                main_applicant_nric=result.get("main_applicant_nric"),
+            )
+
         ineligible_row = {
             "application_id": result.get("application_id"),
             "main_applicant_nric": result.get("main_applicant_nric"),
             "co_applicant_nric": result.get("co_applicant_nric"),
-            "reasons": result.get("ineligibility_reasons", []),
+            "reasons": normalized_reasons,
+            "reason_summary": " | ".join(normalized_reasons) if normalized_reasons else None,
+            "formatted_reasons": format_ineligibility_reasons(normalized_reasons),
             "application_update": result.get("application_update", {}),
         }
         ineligible_rows.append(ineligible_row)
@@ -521,6 +872,15 @@ def validate_submitted_applications(applications, exercise_projects):
                 f"Failed to update application {ineligible_row['application_id']} to ineligible status: "
                 f"{update_meta.get('message') or 'unknown error.'}"
             )
+        # Extra debug logging for unsuccessful transitions
+        log_action(
+            "Application marked as unsuccessful after ballot/validation",
+            level=logging.WARNING,
+            application_id=ineligible_row["application_id"],
+            main_applicant_nric=ineligible_row["main_applicant_nric"],
+            reasons=ineligible_row["reasons"],
+            reason_summary=ineligible_row["reason_summary"],
+        )
 
     for warning in warnings:
         log_action("Validation warning", level=logging.WARNING, warning=warning)
@@ -584,6 +944,7 @@ def run_ballot_for_group(group_applications, chance_map, group_context=None):
         raise BallotOrchestrationError(
             "Ballot service returned an invalid results payload.",
             502,
+            step="run_ballot_for_group",
         )
 
     log_action(
@@ -661,6 +1022,7 @@ def create_flat_selection_entries_bulk(records, town_name=None, flat_type=None):
         raise BallotOrchestrationError(
             "Flat selection bulk endpoint returned an invalid payload.",
             502,
+            step="create_flat_selection_entries_bulk",
         )
 
     result_map = {}
@@ -719,7 +1081,7 @@ def project_has_flat_selection_failures(project_result):
 
 
 # Processes project.
-def process_project(project, applications, chance_map):
+def process_project(project, applications, chance_map, first_booking_date):
     """Execute ballot processing for a single project."""
     project_id = int(project["project_id"])
     project_name = str(project.get("project_name") or f"Project {project_id}")
@@ -762,8 +1124,9 @@ def process_project(project, applications, chance_map):
     ballot_groups = []
     queue_assigned_count = 0
     created_entries = 0
+    pending_notifications = []
 
-    for group_key in sorted(grouped.keys(), key=lambda item: (item[0], item[1])):
+    for group_key in sorted(grouped.keys(), key=lambda item: (flat_type_sort_key(item[1]), str(item[0]).lower())):
         group_town_name, group_flat_type = group_key
         group_applications = grouped[group_key]
 
@@ -823,6 +1186,7 @@ def process_project(project, applications, chance_map):
                 "final_chance": chances["final_chance"],
                 "ticket_weight": chances["final_chance"],
                 "queue_number": queue_number,
+                "booking_slot": compute_booking_slot(queue_number, first_booking_date),
                 "queue_result": "queued",
                 "flat_selection": {
                     "created": False,
@@ -925,6 +1289,35 @@ def process_project(project, applications, chance_map):
                         "message": warning,
                     }
 
+        for entry in group_entries:
+            application = group_lookup.get(entry["application_id"], {})
+            email, mobile = get_main_applicant_contact(application)
+            is_queued = entry.get("queue_result") == "queued"
+            if not is_queued:
+                continue
+
+            entry["notification"] = {
+                "sent": False,
+                "deferred": True,
+                "email": bool(email),
+                "mobile": bool(mobile),
+            }
+            pending_notifications.append(
+                {
+                    "kind": "queue_assignment",
+                    "project_name": project_name,
+                    "town_name": group_town_name,
+                    "flat_type": group_flat_type,
+                    "application_id": entry["application_id"],
+                    "applicant_nric": entry.get("main_applicant_nric"),
+                    "email": email,
+                    "mobile": mobile,
+                    "queue_number": entry.get("queue_number"),
+                    "booking_slot": entry.get("booking_slot"),
+                    "entry": entry,
+                }
+            )
+
         group_queue_end = len(ballot_results)
 
         log_action(
@@ -964,6 +1357,7 @@ def process_project(project, applications, chance_map):
         "flat_selection_entries_created": created_entries,
         "entries": entries,
         "ballot_groups": ballot_groups,
+        "pending_notifications": pending_notifications,
         "warnings": warnings,
     }
 
@@ -1041,8 +1435,11 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
     """Execute one end-to-end ballot run for an exercise."""
     run_id = str(uuid.uuid4())
     started_at = now_iso()
+    ballot_datetime = datetime.utcnow()
+    first_booking_date = datetime.combine(next_monday_after(ballot_datetime.date()), datetime.min.time())
     all_warnings = []
     manage_audit = not skip_audit
+    pending_applicant_notifications = []
 
     log_action(
         "Starting process-ballot run",
@@ -1059,6 +1456,7 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
                 raise BallotOrchestrationError(
                     "audit_id is required when skip_audit is false.",
                     status_code=400,
+                    step="execute_ballot_run.validate_audit",
                 )
             update_audit_record(
                 audit_id,
@@ -1116,6 +1514,51 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
             initial_candidate_applications,
             exercise_projects,
         )
+        projects_by_id = {
+            item.get("project_id"): item
+            for item in exercise_projects
+            if isinstance(item, dict) and isinstance(item.get("project_id"), int)
+        }
+        applications_by_id = {
+            item.get("application_id"): item
+            for item in initial_candidate_applications
+            if isinstance(item, dict) and is_positive_int(item.get("application_id"))
+        }
+
+        for ineligible_row in ineligible_applications:
+            if not isinstance(ineligible_row, dict):
+                continue
+
+            application_id = ineligible_row.get("application_id")
+            if not is_positive_int(application_id):
+                continue
+
+            source_application = applications_by_id.get(application_id)
+            if not isinstance(source_application, dict):
+                continue
+
+            project_id = source_application.get("project_id")
+            project = projects_by_id.get(project_id) if isinstance(project_id, int) else None
+            project_name = (
+                str(project.get("project_name") or f"Project {project_id}")
+                if isinstance(project, dict)
+                else "Unknown Project"
+            )
+
+            pending_applicant_notifications.append(
+                {
+                    "kind": "validation_failure",
+                    "application": source_application,
+                    "ineligible_row": ineligible_row,
+                    "project_name": project_name,
+                }
+            )
+            ineligible_row["notification"] = {
+                "sent": False,
+                "deferred": True,
+                "project_name": project_name,
+            }
+
         all_warnings.extend(validation_warnings)
         log_action(
             "Completed validation stage",
@@ -1123,6 +1566,7 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
             validated_count=len(validation_results),
             ineligible_count=len(ineligible_applications),
             validation_warning_count=len(validation_warnings),
+            deferred_validation_notification_count=len(ineligible_applications),
         )
 
         # Filter out ineligible applications from the initial fetch (no second fetch needed)
@@ -1201,10 +1645,13 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
                 continue
 
             project_applications = grouped_by_project.get(project_id, [])
-            project_result = process_project(project, project_applications, chance_map)
+            project_result = process_project(project, project_applications, chance_map, first_booking_date)
             project_warnings = project_result.pop("warnings", [])
             all_warnings.extend(project_warnings)
             project_results.append(project_result)
+            project_notifications = project_result.pop("pending_notifications", [])
+            if isinstance(project_notifications, list):
+                pending_applicant_notifications.extend(project_notifications)
 
             if project_has_flat_selection_failures(project_result):
                 flat_selection_failure_messages.append(
@@ -1229,6 +1676,53 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
                 "Ballot run could not be completed because one or more flat-selection queue entries were not created.",
                 status_code=502,
                 details=flat_selection_failure_messages,
+                step="execute_ballot_run.verify_flat_selection_writes",
+            )
+
+        applicant_notification_failures = 0
+        applicant_notification_sent = 0
+        for notification in pending_applicant_notifications:
+            if not isinstance(notification, dict):
+                continue
+
+            kind = notification.get("kind")
+            if kind == "validation_failure":
+                sent = notify_validation_failure(
+                    application=notification.get("application"),
+                    ineligible_row=notification.get("ineligible_row"),
+                    project_name=notification.get("project_name"),
+                )
+                target_row = notification.get("ineligible_row")
+                if isinstance(target_row, dict):
+                    target_row["notification"]["sent"] = bool(sent)
+                    target_row["notification"]["deferred"] = False
+            elif kind == "queue_assignment":
+                sent = notify_queue_assignment(
+                    project_name=notification.get("project_name"),
+                    town_name=notification.get("town_name"),
+                    flat_type=notification.get("flat_type"),
+                    application_id=notification.get("application_id"),
+                    applicant_nric=notification.get("applicant_nric"),
+                    email=notification.get("email"),
+                    mobile=notification.get("mobile"),
+                    queue_number=notification.get("queue_number"),
+                    booking_slot=notification.get("booking_slot"),
+                )
+                target_entry = notification.get("entry")
+                if isinstance(target_entry, dict):
+                    target_entry["notification"]["sent"] = bool(sent)
+                    target_entry["notification"]["deferred"] = False
+            else:
+                continue
+
+            if sent:
+                applicant_notification_sent += 1
+            else:
+                applicant_notification_failures += 1
+
+        if applicant_notification_failures > 0:
+            all_warnings.append(
+                f"Failed to publish {applicant_notification_failures} applicant notification(s)."
             )
 
         if manage_audit and isinstance(audit_id, int):
@@ -1240,6 +1734,8 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
             exercise_id=exercise_id,
             totals=totals,
             warning_count=len(all_warnings),
+            applicant_notification_sent=applicant_notification_sent,
+            applicant_notification_failures=applicant_notification_failures,
             audit_status="completed" if manage_audit else "external",
         )
 
@@ -1287,6 +1783,16 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
             except BallotOrchestrationError:
                 logger.exception("Failed to update audit status to error")
 
+        notify_admin_failure(
+            exercise_id=exercise_id,
+            audit_id=audit_id,
+            run_id=run_id,
+            trigger_source=trigger_source,
+            error_message=exc.message,
+            details=exc.details,
+            step=exc.step,
+        )
+
         return (
             {
                 "code": exc.status_code,
@@ -1324,6 +1830,16 @@ def execute_ballot_run(exercise_id, trigger_source="manual", audit_id=None, skip
                 )
             except BallotOrchestrationError:
                 logger.exception("Failed to update audit status to error")
+
+        notify_admin_failure(
+            exercise_id=exercise_id,
+            audit_id=audit_id,
+            run_id=run_id,
+            trigger_source=trigger_source,
+            error_message=str(exc),
+            details=None,
+            step="execute_ballot_run.unexpected_exception",
+        )
 
         return (
             {
