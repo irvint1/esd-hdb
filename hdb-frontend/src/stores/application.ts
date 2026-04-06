@@ -1014,9 +1014,19 @@ export const useApplicationStore = defineStore('application', () => {
     queueNumber.value = buildQueueNumber(form.value.nric)
   }
 
-  function reserveUnit(unit: AvailableUnit) {
-    selectedUnit.value = unit
-    status.value = 'selected'
+  async function reserveUnit(unit: AvailableUnit) {
+  await fetch(`http://localhost:5006/flats/${unit.id}/reserve`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ applicant_id: form.value.nric }),
+  })
+
+  selectedUnit.value = unit
+  status.value = 'selected'
+  }
+
+  function removeUnit(flatId: number) {
+  availableUnitsState.value = availableUnitsState.value.filter((u) => u.id !== flatId)
   }
 
   async function loadAvailableUnits() {
@@ -1140,5 +1150,6 @@ export const useApplicationStore = defineStore('application', () => {
     loadAvailableUnits,
     setDocument,
     resetApplication,
+    removeUnit,
   }
 })

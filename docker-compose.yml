@@ -344,6 +344,7 @@ services:
     container_name: flat_service
     ports:
       - "5006:5006"
+      - "5017:5017" # WebSocket port
     environment:
       DB_HOST: flat-db
       DB_PORT: 3306

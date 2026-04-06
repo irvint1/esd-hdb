@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Building2, Hash, MapPinned, Ruler, SunMedium } from 'lucide-vue-next'
 import SelectionModal from '@/components/SelectionModal.vue'
 import { useAuth } from '@/stores/auth'
@@ -13,6 +13,8 @@ import {
 
 const applicationStore = useApplicationStore()
 const { applicantNric } = useAuth()
+
+const socket = ref<WebSocket | null>(null)
 
 const focusedUnit = ref<AvailableUnit | null>(applicationStore.selectedUnit)
 const isModalOpen = ref(false)
@@ -233,7 +235,27 @@ onMounted(async () => {
   } catch {
     loadError.value = 'Unable to load available flats at the moment.'
   }
+    socket.value = new WebSocket('ws://localhost:5017')
+
+    socket.value.onmessage = (event) => {
+    const data = JSON.parse(event.data) as { flat_id: number; status: string }
+    if (data.status === 'reserved') {
+      applicationStore.removeUnit(data.flat_id)
+    } else if (data.status === 'available') {
+      applicationStore.loadAvailableUnits()
+    }
+  }
+
+  socket.value.onerror = (err) => {
+    console.warn('WebSocket error:', err)
+  }
 })
+
+onUnmounted(() => {
+  socket.value?.close()
+  socket.value = null
+})
+
 </script>
 
 <template>
