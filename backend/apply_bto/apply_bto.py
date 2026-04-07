@@ -60,7 +60,7 @@ workflows = {}
 
 
 NOTIFICATION_SERVICE_URL = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:5000")
-NOTIFICATION_QUEUE_NAME = "hdb_notification_queue"
+NOTIFICATION_QUEUE_NAME = os.environ.get("NOTIFICATION_QUEUE_NAME", "hdb_notification_queue")
 
 def publish_event(routing_key: str, payload: dict):
     """Publish a notification event to the notification API."""

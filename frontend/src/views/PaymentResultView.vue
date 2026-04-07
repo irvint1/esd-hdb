@@ -181,6 +181,11 @@ function schedulePendingPoll() {
   }
 
   pendingPollHandle = window.setTimeout(() => {
+    if (isFlatSelectionFlow.value) {
+      void finaliseFlatSelectionWorkflow()
+      return
+    }
+
     void finaliseApplyBtoWorkflow()
   }, PENDING_POLL_INTERVAL_MS)
 }
@@ -260,7 +265,7 @@ async function finaliseFlatSelectionWorkflow() {
     }
     flatSelectionResult.value = resolvedResult
 
-    if (response.status === 200) {
+    if (response.status !== 404) {
       const completionResponse = await completeFlatAllocation(paymentRef.value)
       completionStatus.value = completionResponse.status
 
@@ -297,6 +302,7 @@ async function finaliseFlatSelectionWorkflow() {
           completionMessage ||
           completionPayload?.message ||
           'Payment verification succeeded, but booking completion is still pending. Please check again shortly.'
+        schedulePendingPoll()
         return
       }
 
@@ -328,25 +334,6 @@ async function finaliseFlatSelectionWorkflow() {
         completionMessage ||
         completionPayload?.message ||
         'Payment was verified but booking finalization is temporarily unavailable. Please check again.'
-      return
-    }
-
-    if (response.status === 202) {
-      statusMessage.value =
-        resolvedResult.message ||
-        responseMessage ||
-        'Payment is still pending. Please check again shortly.'
-      return
-    }
-
-    if (response.status === 402) {
-      statusMessage.value =
-        resolvedResult.message ||
-        responseMessage ||
-        (queryStatus.value === 'cancelled'
-          ? 'Payment was cancelled. You may go back and try again.'
-          : 'Payment failed. Please go back and try again.')
-      clearFlatSelectionPaymentContext()
       return
     }
 

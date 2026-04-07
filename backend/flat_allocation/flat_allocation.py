@@ -1,6 +1,5 @@
 """Flat Allocation Service - Composite orchestrator for Scenario 3 flat selection and payment."""
 
-import json
 import logging
 import os
 from datetime import datetime
@@ -20,13 +19,8 @@ APPLICATION_SERVICE_URL = os.environ.get('APPLICANT_URL', os.environ.get('APPLIC
 FLAT_SELECTION_URL = os.environ.get('FLAT_SELECTION_URL', 'http://localhost:5002')
 NETS_PAYMENT_URL = os.environ.get('NETS_PAYMENT_URL', 'http://localhost:5003')
 NOTIFICATION_URL = os.environ.get('NOTIFICATION_URL', 'http://localhost:5000')
-RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'localhost')
-RABBITMQ_PORT = int(os.environ.get('RABBITMQ_PORT', 5672))
-RABBITMQ_USERNAME = os.environ.get('RABBITMQ_USERNAME', '')
-RABBITMQ_PASSWORD = os.environ.get('RABBITMQ_PASSWORD', '')
-RABBITMQ_VHOST = os.environ.get('RABBITMQ_VHOST', '/')
+NOTIFICATION_QUEUE_NAME = os.environ.get('NOTIFICATION_QUEUE_NAME', 'hdb_notification_queue')
 REQUEST_TIMEOUT = float(os.environ.get('REQUEST_TIMEOUT_SECONDS', '20'))
-EXCHANGE_NAME = 'flat_allocation'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,68 +61,97 @@ def now_iso():
     return datetime.utcnow().isoformat()
 
 
-def publish_event(routing_key, message):
-    """Publish event to RabbitMQ with HTTP fallback."""
+def format_readable_date(iso_value):
+    if not iso_value:
+        return ''
+
     try:
-        import pika
+        parsed = datetime.fromisoformat(str(iso_value).replace('Z', '+00:00'))
+        return f"{parsed.day} {parsed.strftime('%b %Y')}"
+    except Exception:
+        return str(iso_value)
 
-        parameters = None
-        if RABBITMQ_USERNAME and RABBITMQ_PASSWORD:
-            credentials = pika.PlainCredentials(RABBITMQ_USERNAME, RABBITMQ_PASSWORD)
-            parameters = pika.ConnectionParameters(
-                host=RABBITMQ_HOST,
-                port=RABBITMQ_PORT,
-                virtual_host=RABBITMQ_VHOST,
-                credentials=credentials,
-            )
-        else:
-            parameters = pika.ConnectionParameters(host=RABBITMQ_HOST, port=RABBITMQ_PORT)
 
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type='topic', durable=True)
-        channel.basic_publish(
-            exchange=EXCHANGE_NAME,
-            routing_key=routing_key,
-            body=json.dumps(message),
-            properties=pika.BasicProperties(delivery_mode=2),
+def publish_event(routing_key, message):
+    """Publish event via notification service HTTP endpoint."""
+    try:
+        resp = requests.post(
+            f'{NOTIFICATION_URL}/publish',
+            json={
+                'exchange': 'bto',
+                'exchange_type': 'topic',
+                'routing_key': routing_key,
+                'queue_name': NOTIFICATION_QUEUE_NAME,
+                'payload': message,
+            },
+            timeout=REQUEST_TIMEOUT,
         )
-        connection.close()
-        logger.info('[AMQP] Published event: %s', routing_key)
+        resp.raise_for_status()
+        logger.info('[NOTIFY] Published event: %s', routing_key)
         return True
     except Exception as e:
-        logger.warning('[AMQP] Failed to publish: %s. Falling back to HTTP.', e)
-        try:
-            subject = 'Flat Selection Confirmed' if 'confirmed' in routing_key else 'Payment Failed'
-            requests.post(
-                f'{NOTIFICATION_URL}/notify',
-                json={
-                    'email': message.get('email', ''),
-                    'phone': message.get('phone', ''),
-                    'subject': subject,
-                    'message': str(message),
-                    'event_type': routing_key,
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-        except Exception:
-            pass
+        logger.warning('[NOTIFY] Failed to publish event %s: %s', routing_key, e)
         return False
 
 
-def get_applicant_contact(application_id):
-    """Get main applicant email and phone from application-service."""
+def _extract_main_contact(application_payload):
+    members = application_payload.get('members', []) if isinstance(application_payload, dict) else []
+    main = next((m for m in members if m.get('member_role') == 'MAIN_APPLICANT'), {})
+    return main.get('email', ''), main.get('contact_number', '')
+
+
+def _lookup_application_id_from_selection(selection_id):
     try:
         resp = requests.get(
-            f'{APPLICATION_SERVICE_URL}/applications/{application_id}',
+            f'{FLAT_SELECTION_URL}/flat-selection/{selection_id}',
+            timeout=REQUEST_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            return None
+
+        payload = resp.json()
+        data = payload.get('data') if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            return None
+
+        application_id = data.get('application_id')
+        return int(application_id) if application_id is not None else None
+    except Exception:
+        return None
+
+
+def get_applicant_contact(applicant_id, selection_id=None):
+    """Get main applicant email and phone from application-service."""
+    application_id = _lookup_application_id_from_selection(selection_id) if selection_id else None
+
+    if application_id is not None:
+        try:
+            resp = requests.get(
+                f'{APPLICATION_SERVICE_URL}/applications/{application_id}',
+                timeout=REQUEST_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return _extract_main_contact(resp.json())
+        except Exception:
+            pass
+
+    # Fallback for legacy flows where only NRIC was captured as applicant_id
+    try:
+        resp = requests.get(
+            f'{APPLICATION_SERVICE_URL}/applications',
+            params={'nric': applicant_id},
             timeout=REQUEST_TIMEOUT,
         )
         if resp.status_code != 200:
             return '', ''
-        data = resp.json()
-        members = data.get('members', [])
-        main = next((m for m in members if m.get('member_role') == 'MAIN_APPLICANT'), {})
-        return main.get('email', ''), main.get('contact_number', '')
+
+        payload = resp.json()
+        rows = payload.get('applications', []) if isinstance(payload, dict) else []
+        if not rows:
+            return '', ''
+
+        first = rows[0] if isinstance(rows[0], dict) else {}
+        return _extract_main_contact(first)
     except Exception:
         return '', ''
 
@@ -347,14 +370,16 @@ def complete_select_flat(merchant_txn_ref):
         workflow['stage'] = STAGE_PAYMENT_FAILED
         workflow['updated_at'] = now_iso()
 
-        email, phone = get_applicant_contact(applicant_id)
+        email, phone = get_applicant_contact(applicant_id, selection_id)
         publish_event('payment.failed', {
-            'applicant_id': applicant_id,
+            'eventType': 'PaymentFailed',
+            'subject': 'Payment Failed - Please Retry',
+            'applicantId': applicant_id,
             'flat_id': flat_id,
             'amount': payment_amount,
-            'reason': f'Payment {payment_status}',
             'email': email,
-            'phone': phone,
+            'mobile': phone,
+            'message': f'Your payment of ${payment_amount} for Flat {flat_id} has failed. Please try again.',
         })
 
         result = {
@@ -414,26 +439,74 @@ def complete_select_flat(merchant_txn_ref):
     workflow['updated_at'] = now_iso()
 
     # Update flat selection record
+    selection_reserved_at = ''
     try:
-        requests.put(
+        selection_resp = requests.put(
             f'{FLAT_SELECTION_URL}/flat-selection/{selection_id}/reserve',
             json={'flat_id': flat_id},
             timeout=REQUEST_TIMEOUT,
         )
+        selection_data = selection_resp.json() if selection_resp.content else {}
+        if isinstance(selection_data, dict):
+            selection_reserved_at = (
+                (selection_data.get('data') or {}).get('reserved_at')
+                if isinstance(selection_data.get('data'), dict)
+                else ''
+            )
     except Exception as e:
         logger.warning('Flat selection update failed: %s', e)
 
+    # Retrieve display details for notification message
+    unit_number = ''
+    project_name = ''
+    flat_type = ''
+    reserved_date = ''
+    try:
+        flat_resp = requests.get(
+            f'{FLAT_SERVICE_URL}/flats/{flat_id}',
+            timeout=REQUEST_TIMEOUT,
+        )
+        if flat_resp.status_code == 200:
+            flat_data = flat_resp.json().get('data', {}) if isinstance(flat_resp.json(), dict) else {}
+            if isinstance(flat_data, dict):
+                unit_number = str(flat_data.get('unit_number', '') or '')
+                project_name = str(flat_data.get('project_name', '') or '')
+                flat_type = str(flat_data.get('flat_type', '') or '')
+                reserved_date = format_readable_date(flat_data.get('reserved_at', ''))
+    except Exception as e:
+        logger.warning('Flat detail lookup failed for notification: %s', e)
+
+    if not reserved_date:
+        reserved_date = format_readable_date(selection_reserved_at)
+
+    confirmation_message = (
+        f'Congratulations! Your selection of Flat {flat_id} has been confirmed. '
+        f'Transaction ID: {transaction_id}.\n\n'
+        f'Booked Unit Details:\n'
+        f'Unit / Flat ID: {unit_number or flat_id}\n'
+        f'Project: {project_name or "N/A"}\n'
+        f'Flat Type: {flat_type or "N/A"}\n'
+        f'Reserved Date: {reserved_date or "N/A"}'
+    )
+
     # Get applicant contact details for notification
-    email, phone = get_applicant_contact(applicant_id)
+    email, phone = get_applicant_contact(applicant_id, selection_id)
 
     # Publish confirmation event
     publish_event('flat.confirmed', {
-        'applicant_id': applicant_id,
+        'eventType': 'FlatConfirmed',
+        'subject': 'Flat Selection Confirmed',
+        'applicantId': applicant_id,
         'flat_id': flat_id,
+        'unit_number': unit_number,
+        'project_name': project_name,
+        'flat_type': flat_type,
+        'reserved_date': reserved_date,
         'transaction_id': transaction_id,
         'amount': payment_amount,
         'email': email,
-        'phone': phone,
+        'mobile': phone,
+        'message': confirmation_message,
     })
 
     result = {

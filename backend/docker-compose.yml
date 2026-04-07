@@ -220,6 +220,7 @@ services:
       APPLICATION_SERVICE_URL: http://application-service:5004
       CHECK_ELIGIBILITY_SERVICE_URL: http://check-eligibility-service:5008
       NOTIFICATION_SERVICE_URL: http://notification-api:5000
+      NOTIFICATION_QUEUE_NAME: hdb_notification_queue_marcu
       APPLICATION_FEE: 10
     depends_on:
       - notification-api
@@ -259,6 +260,7 @@ services:
       FLAT_SELECTION_URL: http://flat-selection-service:5002
       NETS_PAYMENT_URL: http://nets-payment-service:5003
       NOTIFICATION_URL: http://notification-api:5000
+      NOTIFICATION_QUEUE_NAME: hdb_notification_queue_marcu
       RABBITMQ_HOST: ${RABBITMQ_HOST:-localhost}
       RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-}
@@ -290,6 +292,8 @@ services:
     container_name: notification_consumer
     env_file:
       - ./notification/.env
+    environment:
+      NOTIFICATION_QUEUE_NAME: hdb_notification_queue_marcu
     restart: always
 
   ballot-audit-db:
@@ -395,6 +399,7 @@ services:
       VALIDATE_ELIGIBILITY_SERVICE_URL: http://validate-eligibility-service:5013
       FLAT_SELECTION_SERVICE_URL: http://flat-selection-service:5002
       NOTIFICATION_SERVICE_URL: http://notification-api:5000
+      NOTIFICATION_QUEUE_NAME: hdb_notification_queue_marcu
       REQUEST_TIMEOUT_SECONDS: 20
     depends_on:
       - application-service

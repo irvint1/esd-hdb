@@ -186,7 +186,7 @@ def main():
     channel = connection.channel()
 
     exchange = "bto"
-    queue_name = "hdb_notification_queue"
+    queue_name = os.getenv("NOTIFICATION_QUEUE_NAME", "hdb_notification_queue")
 
     channel.exchange_declare(exchange=exchange, exchange_type="topic", durable=True)
     channel.queue_declare(queue=queue_name, durable=True)
