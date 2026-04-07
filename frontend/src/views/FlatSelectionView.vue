@@ -21,6 +21,7 @@ const isModalOpen = ref(false)
 const isSubmittingSelection = ref(false)
 const loadError = ref('')
 const bookingError = ref('')
+const toastMessage = ref<string | null>(null)
 
 const NETS_PAYMENT_FLOW_KEY = 'nets_payment_flow'
 const NETS_FLOW_FLAT_SELECTION = 'flat-selection'
@@ -213,7 +214,8 @@ async function confirmUnitSelection() {
         window.sessionStorage.setItem(NETS_FLAT_SELECTION_REF_KEY, result.merchant_txn_ref)
       }
     }
-
+    
+    window.sessionStorage.setItem('nets_selected_flat', JSON.stringify(focusedUnit.value))
     isModalOpen.value = false
     submitToNets(gatewayUrl, payload, hmac, apiKeyId)
   } catch (error) {
@@ -228,19 +230,33 @@ function openConfirmModal() {
   isModalOpen.value = true
 }
 
+function showToast(message: string) {
+  toastMessage.value = message
+  setTimeout(() => {
+    toastMessage.value = null
+  }, 5000)
+}
+
 onMounted(async () => {
   loadError.value = ''
-  try {
-    await applicationStore.loadAvailableUnits()
-  } catch {
-    loadError.value = 'Unable to load available flats at the moment.'
-  }
-    socket.value = new WebSocket('ws://localhost:5017')
 
-    socket.value.onmessage = (event) => {
+  socket.value = new WebSocket('ws://localhost:5017')
+
+  socket.value.onopen = () => {
+    applicationStore.loadAvailableUnits()
+  }
+
+  socket.value.onmessage = (event) => {
     const data = JSON.parse(event.data) as { flat_id: number; status: string }
     if (data.status === 'reserved') {
+      const reservedUnit = applicationStore.availableUnits.find(u => u.id === data.flat_id)
+      const unitLabel = reservedUnit ? reservedUnit.unitNumber : `Flat #${data.flat_id}`
       applicationStore.removeUnit(data.flat_id)
+
+      const isMyBooking = applicationStore.selectedUnit?.id === data.flat_id
+      if (!isMyBooking) {
+        showToast(`${unitLabel} has been reserved by another applicant.`)
+      }
     } else if (data.status === 'available') {
       applicationStore.loadAvailableUnits()
     }
@@ -248,6 +264,8 @@ onMounted(async () => {
 
   socket.value.onerror = (err) => {
     console.warn('WebSocket error:', err)
+    // fallback: load units even if WS fails
+    applicationStore.loadAvailableUnits()
   }
 })
 
@@ -266,6 +284,10 @@ onUnmounted(() => {
         <h1 class="page-title">{{ applicationStore.developmentName }}</h1>
         <p class="page-subtitle page-subtitle--queue">Queue Number: {{ applicationStore.queueNumber }}</p>
       </header>
+
+      <div v-if="toastMessage" class="toast">
+        {{ toastMessage }}
+      </div>
 
       <p v-if="loadError" class="load-error">{{ loadError }}</p>
 
@@ -751,4 +773,17 @@ onUnmounted(() => {
     align-items: flex-start;
   }
 }
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    z-index: 999;
+    padding: 14px 20px;
+    border-radius: 12px;
+    background: var(--color-charcoal);
+    color: var(--color-white);
+    font-weight: 600;
+    font-size: 0.95rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted,onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Building2, FileText, MapPinned, UserRound } from 'lucide-vue-next'
 import HeroCarousel from '@/components/HeroCarousel.vue'
@@ -535,6 +535,8 @@ function toCard(project: ProjectRecord) {
   }
 }
 
+let dashboardWs: WebSocket | null = null
+
 onMounted(async () => {
   launchesError.value = ''
   launchProjects.value = []
@@ -571,6 +573,18 @@ onMounted(async () => {
     flatSelectionByApplicationId.value = {}
     bookedUnitNumber.value = null
   }
+  dashboardWs = new WebSocket('ws://localhost:5017')
+  dashboardWs.onmessage = async () => {
+    await refreshFlatSelections()
+  }
+  dashboardWs.onerror = (err) => console.warn('Dashboard WebSocket error:', err)
+})
+
+
+
+onUnmounted(() => {
+  dashboardWs?.close()
+  dashboardWs = null
 })
 
 watch(currentNric, async () => {

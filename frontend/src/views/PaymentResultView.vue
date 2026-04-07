@@ -293,6 +293,12 @@ async function finaliseFlatSelectionWorkflow() {
         applicationStore.status = 'selected'
         applicationStore.queueNumber = null
         applicationStore.lastSubmittedAt = new Date().toISOString()
+        const storedFlat = window.sessionStorage.getItem('nets_selected_flat')
+        if (storedFlat) {
+          applicationStore.selectedUnit = JSON.parse(storedFlat)
+          window.sessionStorage.removeItem('nets_selected_flat')
+        }
+
         clearFlatSelectionPaymentContext()
         return
       }
