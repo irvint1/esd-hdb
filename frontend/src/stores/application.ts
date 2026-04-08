@@ -378,13 +378,7 @@ export const useApplicationStore = defineStore('application', () => {
   const projectCatalog = ref<ProjectRecord[]>([])
   const isLoadingProjectCatalog = ref(false)
 
-  const availableUnits = computed(() => {
-    if (availableUnitsState.value.length > 0) {
-      return availableUnitsState.value
-    }
-
-    return buildAvailableUnits(form.value.preferredTown)
-  })
+  const availableUnits = computed(() => availableUnitsState.value)
   const projectByTown = computed(() => {
     const map = new Map<string, ProjectRecord>()
 
@@ -1029,27 +1023,25 @@ export const useApplicationStore = defineStore('application', () => {
   availableUnitsState.value = availableUnitsState.value.filter((u) => u.id !== flatId)
   }
 
-  async function loadAvailableUnits() {
-    // Load project catalog in the background so flat availability can render immediately
-    // using fallback project mappings when the upstream project service is slow.
+  async function loadAvailableUnits(overrideProjectId?: number, overrideFlatType?: string) {
     void ensureProjectCatalogLoaded()
 
     const preferredTown = form.value.preferredTown
-    if (!hasText(preferredTown)) {
-      availableUnitsState.value = []
-      return
+    const params: { town?: string; flat_type?: string; project_id?: number } = {}
+
+    if (typeof overrideProjectId === 'number' && overrideProjectId > 0) {
+      params.project_id = overrideProjectId
+    } else if (hasText(preferredTown)) {
+      params.town = preferredTown
+      const resolvedProject = resolvePreferredProject(preferredTown)
+      if (resolvedProject) {
+        params.project_id = resolvedProject.project_id
+      }
     }
 
-    const params: { town?: string; flat_type?: string; project_id?: number } = {
-      town: preferredTown,
-    }
-
-    const resolvedProject = resolvePreferredProject(preferredTown)
-    if (resolvedProject) {
-      params.project_id = resolvedProject.project_id
-    }
-
-    if (hasText(form.value.flatType)) {
+    if (overrideFlatType && hasText(overrideFlatType)) {
+      params.flat_type = overrideFlatType
+    } else if (hasText(form.value.flatType)) {
       params.flat_type = form.value.flatType
     }
 

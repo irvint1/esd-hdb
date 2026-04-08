@@ -94,7 +94,7 @@ create_route   "project"      "project-list-route"              "/projects"     
 echo ""
 echo "==> Scenario 3: Flat Selection"
 
-create_service "flat"           "http://flat-service:5006"
+create_service "flat"           "http://10.43.13.132:5006"
 create_route   "flat"           "flat-list-route"                  "/flats"                                   '["GET","OPTIONS"]'
 
 create_service "flat-selection" "http://flat-selection-service:5002"

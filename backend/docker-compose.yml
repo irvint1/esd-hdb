@@ -255,7 +255,7 @@ services:
     ports:
       - "5016:5005"
     environment:
-      FLAT_AVAILABILITY_URL: http://flat-service:5006
+      FLAT_AVAILABILITY_URL: http://10.43.13.132:5006
       APPLICANT_URL: http://application-service:5004
       FLAT_SELECTION_URL: http://flat-selection-service:5002
       NETS_PAYMENT_URL: http://nets-payment-service:5003
@@ -325,36 +325,38 @@ services:
       - ballot-audit-db
     restart: always
 
-  flat-db:
-    image: mysql:8.0
-    container_name: flat_db
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: flat_availability
-    ports:
-      - "3307:3306"
-    volumes:
-      - flat_db_data:/var/lib/mysql
-      - ./flat/flats.sql:/docker-entrypoint-initdb.d/flats.sql:ro
-    restart: always
-
-  flat-service:
-    build:
-      context: ./flat
-      dockerfile: Dockerfile
-    container_name: flat_service
-    ports:
-      - "5006:5006"
-      - "5017:5017" # WebSocket port
-    environment:
-      DB_HOST: flat-db
-      DB_PORT: 3306
-      DB_USER: root
-      DB_PASSWORD: root
-      DB_NAME: flat_availability
-    depends_on:
-      - flat-db
-    restart: always
+# ─── MOVED TO MACHINE B (cross-machine BTL demo) ───
+  # flat-db:
+  #   image: mysql:8.0
+  #   container_name: flat_db
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: root
+  #     MYSQL_DATABASE: flat_availability
+  #   ports:
+  #     - "3307:3306"
+  #   volumes:
+  #     - flat_db_data:/var/lib/mysql
+  #     - ./flat/flats.sql:/docker-entrypoint-initdb.d/flats.sql:ro
+  #   restart: always
+  #
+  # flat-service:
+  #   build:
+  #     context: ./flat
+  #     dockerfile: Dockerfile
+  #   container_name: flat_service
+  #   ports:
+  #     - "5006:5006"
+  #     - "5017:5017" # WebSocket port
+  #   environment:
+  #     DB_HOST: flat-db
+  #     DB_PORT: 3306
+  #     DB_USER: root
+  #     DB_PASSWORD: root
+  #     DB_NAME: flat_availability
+  #   depends_on:
+  #     - flat-db
+  #   restart: always
+  # ─── END MOVED BLOCK ───
 
   flat-selection-db:
     image: mysql:8.0

@@ -5,6 +5,7 @@ import SelectionModal from '@/components/SelectionModal.vue'
 import { useAuth } from '@/stores/auth'
 import { useApplicationStore, type AvailableUnit } from '@/stores/application'
 import {
+  fetchApplications,
   fetchFlatSelections,
   getErrorMessage,
   selectFlatAllocation,
@@ -240,10 +241,47 @@ function showToast(message: string) {
 onMounted(async () => {
   loadError.value = ''
 
+  let projectIdForUser: number | undefined
+  let flatTypeForUser: string | undefined
+
+  const nric = (applicantNric.value ?? applicationStore.form.nric).trim().toUpperCase()
+  if (nric) {
+    try {
+      const selectionResponse = await fetchFlatSelections({ applicant_nric: nric })
+      if (selectionResponse.status === 200 && Array.isArray(selectionResponse.data.data)) {
+        const eligible = selectionResponse.data.data.find(
+          (record) => record.status === 'balloted' || record.status === 'selecting',
+        )
+        if (eligible) {
+          projectIdForUser = eligible.project_id
+
+          // Now look up the application to get flat_type
+          try {
+            const appResponse = await fetchApplications({ main_applicant_nric: nric })
+            if (appResponse.status === 200 && Array.isArray(appResponse.data.applications)) {
+              const matchingApp = appResponse.data.applications.find(
+                (app) => app.application_id === eligible.application_id,
+              )
+              if (matchingApp) {
+                flatTypeForUser = matchingApp.flat_type
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to fetch application for flat_type:', err)
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to fetch flat-selection record:', error)
+    }
+  }
+
+  await applicationStore.loadAvailableUnits(projectIdForUser, flatTypeForUser)
+
   socket.value = new WebSocket('ws://localhost:5017')
 
   socket.value.onopen = () => {
-    applicationStore.loadAvailableUnits()
+    // No-op: units already loaded above
   }
 
   socket.value.onmessage = (event) => {
@@ -258,14 +296,13 @@ onMounted(async () => {
         showToast(`${unitLabel} has been reserved by another applicant.`)
       }
     } else if (data.status === 'available') {
-      applicationStore.loadAvailableUnits()
+      applicationStore.loadAvailableUnits(projectIdForUser, flatTypeForUser)
     }
   }
 
   socket.value.onerror = (err) => {
     console.warn('WebSocket error:', err)
-    // fallback: load units even if WS fails
-    applicationStore.loadAvailableUnits()
+    applicationStore.loadAvailableUnits(projectIdForUser, flatTypeForUser)
   }
 })
 
