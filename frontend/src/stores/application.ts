@@ -9,6 +9,7 @@ import {
   type ProjectRecord,
   fetchProjects,
   fetchAvailableFlats,
+  fetchFlatSelections,
 } from '@/services/api'
 import type { MyInfoPersona } from '@/data/myinfoPersonas'
 
@@ -959,6 +960,23 @@ export const useApplicationStore = defineStore('application', () => {
       flatType: application.flat_type,
     }
     mainApplicantProfileLocked.value = false
+    // Fetch real queue number from flat-selection service
+    if (application.main_applicant_nric) {
+      void fetchFlatSelections({ applicant_nric: application.main_applicant_nric })
+        .then(({ status: respStatus, data }) => {
+          if (respStatus === 200 && Array.isArray(data.data) && data.data.length > 0) {
+            const record = data.data.find((r) => r.application_id === application.application_id) ?? data.data[0]
+            if (record) {
+              queueNumber.value = `Q${record.queue_number}`
+              // Mark as balloted so the "Book This Unit" button becomes clickable
+              if (status.value !== 'selected') {
+                status.value = 'balloted'
+              }
+            }
+          }
+        })
+        .catch(() => { /* ignore */ })
+    }
 
     coApplicants.value = application.members
       .filter((member) => member.member_role === 'CO_APPLICANT')
@@ -1104,6 +1122,7 @@ export const useApplicationStore = defineStore('application', () => {
 
   return {
     townOptions,
+    projectByTown,
     form,
     mainApplicantProfileLocked,
     coApplicants,

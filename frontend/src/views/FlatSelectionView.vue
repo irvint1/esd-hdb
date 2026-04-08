@@ -346,7 +346,6 @@ onUnmounted(() => {
             <div class="floor-picker__legend">
               <span><i class="legend-dot legend-dot--available" /> Available</span>
               <span><i class="legend-dot legend-dot--focused" /> Selected</span>
-              <span><i class="legend-dot legend-dot--reserved" /> Reserved</span>
             </div>
           </div>
 

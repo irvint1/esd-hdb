@@ -284,7 +284,7 @@ const applyBtoApi = axios.create({
 
 const processBallotApi = axios.create({
   baseURL: PROCESS_BALLOT_URL,
-  timeout: 30000,
+  timeout: 120000,
 })
 
 const projectApi = axios.create({

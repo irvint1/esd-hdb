@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { CirclePlus, FileText, FolderInput, HousePlus, LockKeyhole, Users } from 'lucide-vue-next'
 import SelectionModal from '@/components/SelectionModal.vue'
@@ -7,13 +7,49 @@ import HouseholdMemberFormCard from '@/components/HouseholdMemberFormCard.vue'
 import { useApplicationStore } from '@/stores/application'
 import { getMyInfoProfile } from '@/services/myinfo'
 import { looksLikeNric } from '@/utils/validation'
+import { fetchAvailableFlats } from '@/services/api'
 
 const router = useRouter()
 const applicationStore = useApplicationStore()
 
 const maritalStatusOptions = ['Single', 'Married', 'Divorced', 'Widowed', 'Separated']
 const citizenshipStatusOptions = ['Citizen', 'PR', 'Foreigner']
-const flatTypeOptions = ['2-Room Flexi', '3-Room', '4-Room', '5-Room']
+const flatTypeOptions = ref<string[]>([])
+const isLoadingFlatTypes = ref(false)
+
+async function loadFlatTypesForTown(town: string) {
+  if (!town) {
+    flatTypeOptions.value = []
+    return
+  }
+  const project = applicationStore.projectByTown?.get(town)
+  if (!project) {
+    flatTypeOptions.value = []
+    return
+  }
+  isLoadingFlatTypes.value = true
+  try {
+    const { status, data } = await fetchAvailableFlats({ project_id: project.project_id })
+    if (status === 200 && Array.isArray(data.data)) {
+      const unique = [...new Set(data.data.map((f) => f.flat_type))].sort()
+      flatTypeOptions.value = unique
+      // Clear the selected flat type if it's no longer valid for this project
+      if (applicationStore.form.flatType && !unique.includes(applicationStore.form.flatType)) {
+        applicationStore.form.flatType = ''
+      }
+    } else {
+      flatTypeOptions.value = []
+    }
+  } finally {
+    isLoadingFlatTypes.value = false
+  }
+}
+
+watch(
+  () => applicationStore.form.preferredTown,
+  (town) => { void loadFlatTypesForTown(town) },
+  { immediate: true },
+)
 const relationshipOptions = [
   'Spouse',
   'Fiance/Fiancee',
