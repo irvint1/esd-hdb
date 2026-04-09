@@ -262,6 +262,11 @@ services:
     container_name: notification_consumer
     environment:
       NOTIFICATION_QUEUE_NAME: hdb_notification_queue
+      RABBITMQ_HOST: ${RABBITMQ_HOST}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
     restart: always
 
   ballot-audit-db:
@@ -372,6 +377,29 @@ services:
       - validate-eligibility-service
       - ballot-service
       - flat-selection-service
+      - notification-api
+    restart: always
+
+  flat-allocation-service:
+    build:
+      context: ./services/flat_allocation
+      dockerfile: Dockerfile
+    container_name: flat_allocation_service
+    ports:
+      - "5012:5005"
+    environment:
+      FLAT_AVAILABILITY_URL: http://flat-service:5006
+      APPLICANT_URL: http://application-service:5004
+      FLAT_SELECTION_URL: http://flat-selection-service:5002
+      NETS_PAYMENT_URL: http://nets-payment-service:5003
+      NOTIFICATION_URL: http://notification-api:5000
+      NOTIFICATION_QUEUE_NAME: hdb_notification_queue
+      REQUEST_TIMEOUT_SECONDS: 20
+    depends_on:
+      - flat-service
+      - application-service
+      - flat-selection-service
+      - nets-payment-service
       - notification-api
     restart: always
 

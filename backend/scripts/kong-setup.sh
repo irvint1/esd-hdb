@@ -22,21 +22,24 @@ ADMIN=http://localhost:8001
 ENABLE_PROCESS_BALLOT_KEY_AUTH=${ENABLE_PROCESS_BALLOT_KEY_AUTH:-true}
 
 # Service URLs from .env
-NETS_PAYMENT_SERVICE_URL=${NETS_PAYMENT_SERVICE_URL:-http://localhost:5003}
-APPLICATION_SERVICE_URL=${APPLICATION_SERVICE_URL:-http://localhost:5004}
-CHECK_ELIGIBILITY_SERVICE_URL=${CHECK_ELIGIBILITY_SERVICE_URL:-http://localhost:5008}
-NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://localhost:5015}
-PROCESS_BALLOT_SERVICE_URL=${PROCESS_BALLOT_SERVICE_URL:-http://localhost:5011}
-BALLOT_SERVICE_URL=${BALLOT_SERVICE_URL:-http://localhost:5005}
+# Use Docker service names for local deployment, fallback to localhost for outside Docker
+APPLY_BTO_SERVICE_URL=${APPLY_BTO_SERVICE_URL:-http://apply-bto-service:5010}
+NETS_PAYMENT_SERVICE_URL=${NETS_PAYMENT_SERVICE_URL:-http://nets-payment-service:5003}
+APPLICATION_SERVICE_URL=${APPLICATION_SERVICE_URL:-http://application-service:5004}
+CHECK_ELIGIBILITY_SERVICE_URL=${CHECK_ELIGIBILITY_SERVICE_URL:-http://check-eligibility-service:5008}
+NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-api:5000}
+PROCESS_BALLOT_SERVICE_URL=${PROCESS_BALLOT_SERVICE_URL:-http://process-ballot-service:5011}
+BALLOT_SERVICE_URL=${BALLOT_SERVICE_URL:-http://ballot-service:5005}
 PROJECT_SERVICE_URL=${PROJECT_SERVICE_URL:-https://personal-iu6aefgj.outsystemscloud.com/ProjectsMicroservice/rest/ProjectsAPI}
-VALIDATE_ELIGIBILITY_SERVICE_URL=${VALIDATE_ELIGIBILITY_SERVICE_URL:-http://localhost:5013}
-FLAT_SELECTION_SERVICE_URL=${FLAT_SELECTION_SERVICE_URL:-http://localhost:5002}
-FLAT_SERVICE_URL=${FLAT_SERVICE_URL:-http://localhost:5006}
-SINGPASS_SERVICE_URL=${SINGPASS_SERVICE_URL:-http://localhost:5007}
-MOCKPASS_URL=${MOCKPASS_URL:-http://localhost:5156}
-DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://localhost:5050}
-HFE_APPLICATION_SERVICE_URL=${HFE_APPLICATION_SERVICE_URL:-http://localhost:5009}
+VALIDATE_ELIGIBILITY_SERVICE_URL=${VALIDATE_ELIGIBILITY_SERVICE_URL:-http://validate-eligibility-service:5013}
+FLAT_SELECTION_SERVICE_URL=${FLAT_SELECTION_SERVICE_URL:-http://flat-selection-service:5002}
+FLAT_SERVICE_URL=${FLAT_SERVICE_URL:-http://flat-service:5006}
+SINGPASS_SERVICE_URL=${SINGPASS_SERVICE_URL:-http://singpass-service:5007}
+MOCKPASS_URL=${MOCKPASS_URL:-http://mockpass-service:5156}
+DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://document-service:5050}
+HFE_APPLICATION_SERVICE_URL=${HFE_APPLICATION_SERVICE_URL:-http://hfe-application-service:5009}
 OUTSYSTEMS_PROJECT_API_URL=${PROJECT_SERVICE_URL}
+
 
 # Wait for Kong Admin API to be ready
 echo "Waiting for Kong Admin API..."
@@ -82,7 +85,7 @@ create_route() {
 echo ""
 echo "==> Scenario 1: Apply for BTO"
 
-create_service "apply-bto"    "$APPLICATION_SERVICE_URL"
+create_service "apply-bto"    "$APPLY_BTO_SERVICE_URL"
 create_route   "apply-bto"    "apply-bto-initiate-route"       "/apply-bto/initiate"                        '["POST","OPTIONS"]'
 create_route   "apply-bto"    "apply-bto-complete-route"       "~/apply-bto/complete/[^/]+$"               '["POST","OPTIONS"]'
 create_route   "apply-bto"    "apply-bto-demo-force-route"     "~/apply-bto/demo-force-success/[^/]+$"     '["POST","OPTIONS"]'
@@ -130,7 +133,7 @@ create_route   "flat-selection" "flat-selection-list-route"        "/flat-select
 create_service "application"    "$APPLICATION_SERVICE_URL"
 create_route   "application"    "application-list-route"           "/applications"                            '["GET","OPTIONS"]'
 
-FLAT_ALLOCATION_URL=${FLAT_ALLOCATION_URL:-http://flat-allocation-service:5005}
+FLAT_ALLOCATION_URL=${FLAT_ALLOCATION_URL:-http://ballot-service:5005}
 create_service "flat-allocation" "$FLAT_ALLOCATION_URL"
 create_route   "flat-allocation" "flat-allocation-select-route"    "/select-flat"                            '["POST","OPTIONS"]'
 create_route   "flat-allocation" "flat-allocation-initiate-route"  "/select-flat/initiate"                   '["POST","OPTIONS"]'
