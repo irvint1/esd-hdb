@@ -5,8 +5,8 @@ services:
     restart: always
     environment:
       POSTGRES_DB: kong
-      POSTGRES_USER: kong
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: ${KONG_DB_USER:-kong}
+      POSTGRES_PASSWORD: ${KONG_DB_PASSWORD:-kong}
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "kong"]
       interval: 10s
@@ -24,7 +24,7 @@ services:
       KONG_DATABASE: postgres
       KONG_PG_HOST: kong-database
       KONG_PG_USER: kong
-      KONG_PG_PASSWORD: password
+      KONG_PG_PASSWORD: ${KONG_DB_PASSWORD:-kong}
     depends_on:
       - kong-database
 
@@ -36,7 +36,7 @@ services:
       KONG_DATABASE: postgres
       KONG_PG_HOST: kong-database
       KONG_PG_USER: kong
-      KONG_PG_PASSWORD: password
+      KONG_PG_PASSWORD: ${KONG_DB_PASSWORD:-kong}
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
@@ -54,28 +54,28 @@ services:
     image: mysql:8.0
     container_name: document_db
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: documents
     ports:
       - "3350:3306"
     volumes:
       - document_db_data:/var/lib/mysql
-      - ./document/documents.sql:/docker-entrypoint-initdb.d/documents.sql:ro
+      - ./services/document/documents.sql:/docker-entrypoint-initdb.d/documents.sql:ro
     restart: always
 
   document-service:
     build:
-      context: ./document
+      context: ./services/document
       dockerfile: Dockerfile
     container_name: document_service
     ports:
       - "5050:5050"
     environment:
-      DATABASE_URL: mysql+mysqlconnector://root:root@document-db:3306/documents
+      DATABASE_URL: mysql+mysqlconnector://${DB_USER:-root}:${DB_ROOT_PASSWORD:-root}@document-db:3306/documents
       OCR_DATA_DIR: /data
       OCR_STORAGE_DIR: /data/documents
     volumes:
-      - ./document/data:/data
+      - ./services/document/data:/data
     depends_on:
       - document-db
     restart: always
@@ -84,24 +84,24 @@ services:
     image: mysql:8.0
     container_name: application_db
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: applications
     ports:
       - "3304:3306"
     volumes:
       - application_db_data:/var/lib/mysql
-      - ./application/applications.sql:/docker-entrypoint-initdb.d/applications.sql:ro
+      - ./services/application/applications.sql:/docker-entrypoint-initdb.d/applications.sql:ro
     restart: always
 
   application-service:
     build:
-      context: ./application
+      context: ./services/application
       dockerfile: Dockerfile
     container_name: application_service
     ports:
       - "5004:5004"
     environment:
-      DATABASE_URL: mysql+mysqlconnector://root:root@application-db:3306/applications
+      DATABASE_URL: mysql+mysqlconnector://${DB_USER:-root}:${DB_ROOT_PASSWORD:-root}@application-db:3306/applications
     depends_on:
       - application-db
     restart: always
@@ -109,7 +109,7 @@ services:
   mockpass-service:
     build:
       context: .
-      dockerfile: mockpass/Dockerfile
+      dockerfile: services/mockpass/Dockerfile
     container_name: mockpass_service
     ports:
       - "5156:5156"
@@ -125,7 +125,7 @@ services:
 
   singpass-service:
     build:
-      context: ./singpass
+      context: ./services/singpass
       dockerfile: Dockerfile
     container_name: singpass_service
     ports:
@@ -148,31 +148,31 @@ services:
     image: mysql:8.0
     container_name: hfe_application_db
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: hfe_applications
     ports:
       - "3309:3306"
     volumes:
       - hfe_application_db_data:/var/lib/mysql
-      - ./hfe_application/hfe_application.sql:/docker-entrypoint-initdb.d/hfe_application.sql:ro
+      - ./services/hfe_application/hfe_application.sql:/docker-entrypoint-initdb.d/hfe_application.sql:ro
     restart: always
 
   hfe-application-service:
     build:
-      context: ./hfe_application
+      context: ./services/hfe_application
       dockerfile: Dockerfile
     container_name: hfe_application_service
     ports:
       - "5009:5009"
     environment:
-      DATABASE_URL: mysql+mysqlconnector://root:root@hfe-application-db:3306/hfe_applications
+      DATABASE_URL: mysql+mysqlconnector://${DB_USER:-root}:${DB_ROOT_PASSWORD:-root}@hfe-application-db:3306/hfe_applications
     depends_on:
       - hfe-application-db
     restart: always
 
   check-eligibility-service:
     build:
-      context: ./check_eligibility
+      context: ./services/check_eligibility
       dockerfile: Dockerfile
     container_name: check_eligibility_service
     ports:
@@ -184,7 +184,7 @@ services:
 
   validate-eligibility-service:
     build:
-      context: ./validate_eligibility
+      context: ./services/validate_eligibility
       dockerfile: Dockerfile
     container_name: validate_eligibility_service
     ports:
@@ -199,7 +199,7 @@ services:
 
   ballot-service:
     build:
-      context: ./ballot
+      context: ./services/ballot
       dockerfile: Dockerfile
     container_name: ballot_service
     ports:
@@ -208,7 +208,7 @@ services:
 
   apply-bto-service:
     build:
-      context: ./apply_bto
+      context: ./services/apply_bto
       dockerfile: Dockerfile
     container_name: apply_bto_service
     ports:
@@ -226,8 +226,7 @@ services:
 
   nets-payment-service:
     build:
-      context: ./nets_payment
-      dockerfile: Dockerfile.txt
+      context: ./services/nets_payment
     container_name: nets_payment_service
     ports:
       - "5003:5003"
@@ -248,23 +247,19 @@ services:
   # Notification Service — RabbitMQ wrapper API
   notification-api:
     build:
-      context: ./notification
+      context: ./services/notification
       dockerfile: Dockerfile
     container_name: notification_api
     ports:
       - "5015:5000"
-    env_file:
-      - ./notification/.env
     restart: always
 
   # Notification Service — RabbitMQ consumer + Twilio SMS
   notification-consumer:
     build:
-      context: ./notification
+      context: ./services/notification
       dockerfile: Dockerfile.consumer
     container_name: notification_consumer
-    env_file:
-      - ./notification/.env
     environment:
       NOTIFICATION_QUEUE_NAME: hdb_notification_queue
     restart: always
@@ -273,24 +268,24 @@ services:
     image: mysql:8.0
     container_name: ballot_audit_db
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ballot_audits
     ports:
       - "3300:3306"
     volumes:
       - ballot_audit_db_data:/var/lib/mysql
-      - ./ballot_audit/ballot_audits.sql:/docker-entrypoint-initdb.d/ballot_audits.sql:ro
+      - ./services/ballot_audit/ballot_audits.sql:/docker-entrypoint-initdb.d/ballot_audits.sql:ro
     restart: always
 
   ballot-audit-service:
     build:
-      context: ./ballot_audit
+      context: ./services/ballot_audit
       dockerfile: Dockerfile
     container_name: ballot_audit_service
     ports:
       - "5000:5000"
     environment:
-      DATABASE_URL: mysql+mysqlconnector://root:root@ballot-audit-db:3306/ballot_audits
+      DATABASE_URL: mysql+mysqlconnector://${DB_USER:-root}:${DB_ROOT_PASSWORD:-root}@ballot-audit-db:3306/ballot_audits
       PROCESS_BALLOT_SERVICE_URL: http://process-ballot-service:5011
       REQUEST_TIMEOUT_SECONDS: 20
       SCHEDULER_TIMEZONE: Asia/Singapore
@@ -302,18 +297,18 @@ services:
     image: mysql:8.0
     container_name: flat_db
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: flat_availability
     ports:
       - "3307:3306"
     volumes:
       - flat_db_data:/var/lib/mysql
-      - ./flat/flats.sql:/docker-entrypoint-initdb.d/flats.sql:ro
+      - ./services/flat/flats.sql:/docker-entrypoint-initdb.d/flats.sql:ro
     restart: always
 
   flat-service:
     build:
-      context: ./flat
+      context: ./services/flat
       dockerfile: Dockerfile
     container_name: flat_service
     ports:
@@ -322,8 +317,8 @@ services:
     environment:
       DB_HOST: flat-db
       DB_PORT: 3306
-      DB_USER: root
-      DB_PASSWORD: root
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       DB_NAME: flat_availability
     depends_on:
       - flat-db
@@ -333,37 +328,35 @@ services:
     image: mysql:8.0
     container_name: flat_selection_db
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: flat_selection
     ports:
       - "3302:3306"
     volumes:
       - flat_selection_db_data:/var/lib/mysql
-      - ./flat_selection/flat_selection.sql:/docker-entrypoint-initdb.d/flat_selection.sql:ro
+      - ./services/flat_selection/flat_selection.sql:/docker-entrypoint-initdb.d/flat_selection.sql:ro
     restart: always
 
   flat-selection-service:
     build:
-      context: ./flat_selection
+      context: ./services/flat_selection
       dockerfile: Dockerfile
     container_name: flat_selection_service
     ports:
       - "5002:5002"
     environment:
-      DATABASE_URL: mysql+mysqlconnector://root:root@flat-selection-db:3306/flat_selection
+      DATABASE_URL: mysql+mysqlconnector://${DB_USER:-root}:${DB_ROOT_PASSWORD:-root}@flat-selection-db:3306/flat_selection
     depends_on:
       - flat-selection-db
     restart: always
 
   process-ballot-service:
     build:
-      context: ./process_ballot
+      context: ./services/process_ballot
       dockerfile: Dockerfile
     container_name: process_ballot_service
     ports:
       - "5011:5011"
-    env_file:
-      - ./notification/.env
     environment:
       BALLOT_AUDIT_SERVICE_URL: http://ballot-audit-service:5000
       BALLOT_SERVICE_URL: http://ballot-service:5005
@@ -382,6 +375,33 @@ services:
       - notification-api
     restart: always
 
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - "13000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+
 volumes:
   kong_pgdata:
   document_db_data:
@@ -390,3 +410,5 @@ volumes:
   ballot_audit_db_data:
   flat_db_data:
   flat_selection_db_data:
+  prometheus_data:
+  grafana_data:

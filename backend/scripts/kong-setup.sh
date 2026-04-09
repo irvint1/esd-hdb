@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Kong Admin API setup script for esd-hdb
 # Run this AFTER docker-compose.yml is up.
 #
@@ -16,9 +17,26 @@ if [ -f "$(dirname "$0")/../.env" ]; then
   set +a
 fi
 
+
 ADMIN=http://localhost:8001
 ENABLE_PROCESS_BALLOT_KEY_AUTH=${ENABLE_PROCESS_BALLOT_KEY_AUTH:-true}
-OUTSYSTEMS_PROJECT_API_URL=${OUTSYSTEMS_PROJECT_API_URL:-https://personal-iu6aefgj.outsystemscloud.com/ProjectsMicroservice/rest/ProjectsAPI}
+
+# Service URLs from .env
+NETS_PAYMENT_SERVICE_URL=${NETS_PAYMENT_SERVICE_URL:-http://localhost:5003}
+APPLICATION_SERVICE_URL=${APPLICATION_SERVICE_URL:-http://localhost:5004}
+CHECK_ELIGIBILITY_SERVICE_URL=${CHECK_ELIGIBILITY_SERVICE_URL:-http://localhost:5008}
+NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://localhost:5015}
+PROCESS_BALLOT_SERVICE_URL=${PROCESS_BALLOT_SERVICE_URL:-http://localhost:5011}
+BALLOT_SERVICE_URL=${BALLOT_SERVICE_URL:-http://localhost:5005}
+PROJECT_SERVICE_URL=${PROJECT_SERVICE_URL:-https://personal-iu6aefgj.outsystemscloud.com/ProjectsMicroservice/rest/ProjectsAPI}
+VALIDATE_ELIGIBILITY_SERVICE_URL=${VALIDATE_ELIGIBILITY_SERVICE_URL:-http://localhost:5013}
+FLAT_SELECTION_SERVICE_URL=${FLAT_SELECTION_SERVICE_URL:-http://localhost:5002}
+FLAT_SERVICE_URL=${FLAT_SERVICE_URL:-http://localhost:5006}
+SINGPASS_SERVICE_URL=${SINGPASS_SERVICE_URL:-http://localhost:5007}
+MOCKPASS_URL=${MOCKPASS_URL:-http://localhost:5156}
+DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://localhost:5050}
+HFE_APPLICATION_SERVICE_URL=${HFE_APPLICATION_SERVICE_URL:-http://localhost:5009}
+OUTSYSTEMS_PROJECT_API_URL=${PROJECT_SERVICE_URL}
 
 # Wait for Kong Admin API to be ready
 echo "Waiting for Kong Admin API..."
@@ -64,24 +82,24 @@ create_route() {
 echo ""
 echo "==> Scenario 1: Apply for BTO"
 
-create_service "apply-bto"    "http://apply-bto-service:5010"
+create_service "apply-bto"    "$APPLICATION_SERVICE_URL"
 create_route   "apply-bto"    "apply-bto-initiate-route"       "/apply-bto/initiate"                        '["POST","OPTIONS"]'
 create_route   "apply-bto"    "apply-bto-complete-route"       "~/apply-bto/complete/[^/]+$"               '["POST","OPTIONS"]'
 create_route   "apply-bto"    "apply-bto-demo-force-route"     "~/apply-bto/demo-force-success/[^/]+$"     '["POST","OPTIONS"]'
 
-create_service "singpass"     "http://singpass-service:5007"
+create_service "singpass"     "$SINGPASS_SERVICE_URL"
 create_route   "singpass"     "singpass-auth-login-route"       "/singpass/auth/login"                      '["GET","OPTIONS"]'
 create_route   "singpass"     "singpass-auth-callback-route"    "/singpass/auth/callback"                   '["GET","OPTIONS"]'
 create_route   "singpass"     "singpass-profile-route"          "/singpass/profile"                         '["GET","OPTIONS"]'
 create_route   "singpass"     "singpass-logout-route"           "/singpass/logout"                          '["POST","OPTIONS"]'
 
-create_service "nets-payment" "http://nets-payment-service:5003"
+create_service "nets-payment" "$NETS_PAYMENT_SERVICE_URL"
 create_route   "nets-payment" "nets-payment-b2s-callback-route" "/payment/b2s-callback"                     '["GET","POST","OPTIONS"]'
 create_route   "nets-payment" "nets-payment-s2s-callback-route" "/payment/s2s-callback"                     '["POST","OPTIONS"]'
 create_route   "nets-payment" "nets-payment-abandon-route"      "~/payment/abandon/[^/]+$"                  '["POST","OPTIONS"]'
 create_route   "nets-payment" "nets-payment-status-route"       "~/payment/status/[^/]+$"                   '["GET","OPTIONS"]'
 
-create_service "document"     "http://document-service:5050"
+create_service "document"     "$DOCUMENT_SERVICE_URL"
 create_route   "document"     "document-extract-route"          "/extract"                                  '["POST","OPTIONS"]'
 create_route   "document"     "document-route"                  "/documents"                                '["GET","OPTIONS"]'
 
@@ -89,27 +107,27 @@ create_route   "document"     "document-route"                  "/documents"    
 echo ""
 echo "==> Scenario 2: Ballot Run"
 
-create_service "process-ballot" "http://process-ballot-service:5011"
+create_service "process-ballot" "$PROCESS_BALLOT_SERVICE_URL"
 create_route   "process-ballot" "process-ballot-run-route"      "/process-ballot/run"                       '["POST","OPTIONS"]'
 
-create_service "ballot-audit" "http://ballot-audit-service:5000"
+create_service "ballot-audit" "$BALLOT_SERVICE_URL"
 create_route   "ballot-audit" "ballot-audit-list-create-route"  "/ballot-audits"                            '["GET","POST","OPTIONS"]'
 create_route   "ballot-audit" "ballot-audit-update-route"       "~/ballot-audits/[0-9]+$"                   '["PUT","OPTIONS"]'
 
-create_service "project"      "$OUTSYSTEMS_PROJECT_API_URL"
+create_service "project"      "$PROJECT_SERVICE_URL"
 create_route   "project"      "project-list-route"              "/projects"                                 '["GET","OPTIONS"]'
 
 # ─── Scenario 3: Flat Selection ──────────────────────────────────────────────
 echo ""
 echo "==> Scenario 3: Flat Selection"
 
-create_service "flat"           "http://flat-service:5006"
+create_service "flat"           "$FLAT_SERVICE_URL"
 create_route   "flat"           "flat-list-route"                  "/flats"                                   '["GET","OPTIONS"]'
 
-create_service "flat-selection" "http://flat-selection-service:5002"
+create_service "flat-selection" "$FLAT_SELECTION_SERVICE_URL"
 create_route   "flat-selection" "flat-selection-list-route"        "/flat-selection"                          '["GET","OPTIONS"]'
 
-create_service "application"    "http://application-service:5004"
+create_service "application"    "$APPLICATION_SERVICE_URL"
 create_route   "application"    "application-list-route"           "/applications"                            '["GET","OPTIONS"]'
 
 FLAT_ALLOCATION_URL=${FLAT_ALLOCATION_URL:-http://flat-allocation-service:5005}

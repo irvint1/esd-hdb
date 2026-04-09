@@ -6,8 +6,8 @@ WORKDIR /app
 RUN npm install @opengovsg/mockpass express
 
 # Copy custom server wrapper and repo-managed MyInfo personas
-COPY mockpass/server.js /app/server.js
-COPY mockpass/v3.json /app/v3.json
+COPY services/mockpass/server.js /app/server.js
+COPY services/mockpass/v3.json /app/v3.json
 
 # Expose port
 EXPOSE 5156

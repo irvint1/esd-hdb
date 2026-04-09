@@ -1,42 +1,85 @@
-# hdb-frontend
+npm --version     # should be v9+
+git --version
 
-This template should help get you started developing with Vue 3 in Vite.
+# Frontend Setup Guide (Simplified)
 
-## Recommended IDE Setup
+## Prerequisites
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- Node.js 18+
+- npm 9+
+- Git
+- Backend services running ([Backend Setup](../backend/README.md))
 
-## Recommended Browser Setup
+## 1. Install Dependencies
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
+cd esd-hdb/frontend
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+## 2. Configure Environment
 
-```sh
+Ensure the backend/.env file contains all required `VITE_*` variables, e.g.:
+
+```
+VITE_API_GATEWAY_URL=http://localhost:8000
+VITE_SINGPASS_URL=http://localhost:8000
+VITE_SINGPASS_USE_SESSIONS=true
+VITE_PROCESS_BALLOT_API_KEY=ballot-cron-job-secret
+```
+
+## 3. Start Development Server
+
+```bash
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+Open http://localhost:5173 in your browser.
 
-```sh
-npm run build
+---
+
+For backend setup, see ../backend/README.md
+
+## Development Guide
+
+### Project Structure
+
+```
+frontend/
+├── src/
+│   ├── components/      # Vue components (buttons, forms, etc.)
+│   ├── views/           # Page components (login, dashboard, ballot, etc.)
+│   ├── router/          # Vue Router configuration
+│   ├── stores/          # Pinia state management
+│   ├── utils/           # Helper functions
+│   ├── api/             # API client setup & endpoints
+│   ├── App.vue          # Root component
+│   └── main.ts          # Entry point
+├── index.html           # HTML template
+├── vite.config.ts       # Vite configuration
+├── package.json         # Dependencies
+├── tsconfig.json        # TypeScript configuration
+└── .env                 # Environment variables (reads from ../backend/.env)
+```
+
+### Key Files to Know
+
+| File | Purpose |
+|------|---------|
+| `src/main.ts` | Application entry point |
+| `src/App.vue` | Root layout component |
+| `src/router/index.ts` | Page routes & navigation |
+| `src/api/` | API client configuration |
+| `src/stores/` | Global state management |
+| `vite.config.ts` | Dev server & build settings |
+
+### Available Scripts
+
+```bash
+npm run dev        # Start development server (http://localhost:5173)
+npm run build      # Build for production (creates dist/)
+npm run preview    # Preview production build locally
+npm run lint       # Check code quality with ESLint
+npm run format     # Auto-format code with Prettier
+npm run type-check # TypeScript type checking
 ```
